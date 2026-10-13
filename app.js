@@ -103,7 +103,7 @@ function open(p, scroll = false) {
   $('#promo').classList.add('hidden');
   $('#pTitle').textContent = `${p.white} vs ${p.black}`;
   $('#pSub').textContent = `#${p.id} · ${p.date || ''} · ${p.category || ''} · ${p.result || ''}`;
-  $('#pTurn').textContent = (user === 'w' ? 'White' : 'Black') + ' to move'; $('#pTurn').className = 'turn ' + user;
+  updateTurn();
   msg(p.description || 'Find the best moves.');
   const idx = filtered().findIndex(x => x.id === p.id); if (idx >= 0) page = Math.floor(idx / PER);
   draw(); renderList(); fitBoard(); localStorage.cp4uLast = p.id; history.replaceState(null, '', '#' + p.id);
@@ -200,7 +200,7 @@ function renderList() {
   $('#list').innerHTML = all.slice(page * PER, page * PER + PER).map(p => `<div class="pcard ${cur && cur.id === p.id ? 'on' : ''}" data-id="${p.id}"><div><b>#${p.id} · ${esc(p.category || '')}</b><br><small>${esc(p.white)} vs ${esc(p.black)} · ${esc(p.date || '')}</small></div>
     <div>${prog.s.includes(p.id) ? '<span class="tick">✔</span>' : ''}${isAdmin ? `<span class="adm"><button data-e="${p.id}">✎</button><button data-x="${p.id}">✕</button></span>` : ''}</div></div>`).join('') || '<p class="mut">No puzzles yet.</p>';
   const ci = cur ? all.findIndex(p => p.id === cur.id) : -1;
-  $('#pager').innerHTML = `<button data-nav="-1" ${ci > 0 ? '' : 'disabled'}>Prev</button><span>${ci >= 0 ? ci + 1 : '–'} / ${all.length}</span><button data-nav="1" ${ci < all.length - 1 ? '' : 'disabled'}>Next</button>`;
+  $('#pager').innerHTML = `<button data-nav="-1" ${ci > 0 ? '' : 'disabled'}>‹ Prev</button><span>${ci >= 0 ? ci + 1 : '–'} / ${all.length}</span><button data-nav="1" ${ci < all.length - 1 ? '' : 'disabled'}>Next ›</button>`;
 }
 $('#pager').onclick = e => {
   const b = e.target.closest('[data-nav]'); if (!b) return;
@@ -377,7 +377,7 @@ $('#setDlg').onclick = e => {
   if (e.target === $('#setDlg')) return $('#setDlg').close();
   const b = e.target.closest('[data-b]'), p = e.target.closest('[data-p]');
   if (b) { cfg.board = b.dataset.b; localStorage.cp4uBoard = cfg.board; applyBoard(); renderSettings(); }
-  if (p) { cfg.pieces = p.dataset.p; localStorage.cp4uPieces = cfg.pieces; preloadPieces(); renderSettings(); if (game) draw(); }
+  if (p) { cfg.pieces = p.dataset.p; localStorage.cp4uPieces = cfg.pieces; preloadPieces(); renderSettings(); if (game) draw(); updateTurn(); }
 };
 
 /* ---------- fit: on desktop the whole puzzle card (board + buttons) fits in one screen, no scrolling ---------- */
@@ -392,6 +392,22 @@ function fitBoard() {
 }
 window.addEventListener('resize', fitBoard); window.addEventListener('orientationchange', () => setTimeout(fitBoard, 200));
 window.addEventListener('load', fitBoard); if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitBoard);
+
+/* ---------- turn pill (king of the chosen piece set) + share ---------- */
+const SITE = 'https://only-beats.github.io/ChessPuzzle4U/';
+function updateTurn() {
+  const t = $('#pTurn');
+  t.className = 'turn ' + user;
+  t.innerHTML = `<img class="kimg" src="${PIECE(user, 'k')}" alt="" onerror="this.onerror=null;this.src='${LICHESS(user, 'k')}'"><span>${user === 'w' ? 'White' : 'Black'} to move</span>`;
+}
+$('#bShare').onclick = async () => {
+  if (!cur) return;
+  const text = `ChessPuzzle4U | Chess Puzzle\n${SITE}#${cur.id}`;
+  if (navigator.share) { try { await navigator.share({ text }); return; } catch (e) { if (e.name === 'AbortError') return; } }
+  try { await navigator.clipboard.writeText(text); }
+  catch { const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch { } ta.remove(); }
+  const b = $('#bShare'); b.textContent = 'Copied!'; setTimeout(() => b.textContent = 'Share', 1500);
+};
 
 /* ---------- start ---------- */
 game = new Chess(); user = 'w'; flip = false; draw();                      // empty-puzzle start position so the board is never blank
