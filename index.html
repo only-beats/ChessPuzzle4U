@@ -10,20 +10,17 @@
   <meta name="description"
     content="ChessPuzzle4U | Chess Puzzle by Dhananjay Patil. Sharpen your skills with (mate-in 1 to 5) challenges using real-game positions">
 
-  <!-- Favicon in multiple formats for better browser compatibility -->
-  <link rel="icon" href="cons/brilliant.png" type="image/svg+xml">
-  <link rel="alternate icon" href="cons/brilliant.png" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="cons/brilliant.png">
+  <!-- Favicon -->
+  <link rel="icon" href="icons/brilliant.png">
+  <link rel="apple-touch-icon" href="icons/brilliant.png">
 
-  <!-- Additional meta tags for better search engine visibility -->
   <meta name="keywords" content="chess, puzzles, mate, checkmate, chess training, chess problems">
   <meta name="author" content="Dhananjay Patil">
   <meta property="og:title" content="ChessPuzzle4U">
   <meta property="og:description" content="Sharpen your chess skills with mate-in 1 to 5 challenges">
   <meta property="og:type" content="website">
-  <meta property="og:image" content="favicon.svg">
+  <meta property="og:image" content="icons/brilliant.png">
 
-  <link rel="icon" href="icons/brilliant.png">
   <link rel="stylesheet" href="style.css">
 </head>
 
@@ -41,7 +38,7 @@
       <div class="pinfo">
         <div><b id="pTitle">Loading…</b>
           <div id="pSub" class="mut"></div>
-        </div><span id="pTurn" class="turn"></span>
+        </div><button id="bShare" class="ghost" type="button">Share</button>
       </div>
 
       <!-- fixed square container: board + pieces always stay aligned -->
@@ -52,7 +49,10 @@
         </div>
       </div>
 
-      <div id="msg" class="msg">Choose a puzzle from the list.</div>
+      <div class="msgrow">
+        <div id="msg" class="msg">Choose a puzzle from the list.</div>
+        <span id="pTurn" class="turn"></span>
+      </div>
       <div id="pager" class="pager"></div>
       <div class="btns">
         <button id="bHint">Hint</button><button id="bSol">Solution</button>
@@ -87,7 +87,7 @@
       <details>
         <summary>PGN ➜ puzzle (from chess.com)</summary>
         <textarea id="pgn" rows="5" placeholder="Paste PGN"></textarea>
-        <div class="row"><label>Half-moves before puzzle <input id="ply" type="number" value="20" min="0"></label>
+        <div class="row"><label>Half-moves before puzzle <input id="ply" type="number" value="0" min="0"></label>
           <label>Solution moves <input id="cnt" type="number" value="5" min="1"></label>
           <button id="pgnGo">Generate</button>
         </div>
