@@ -806,3 +806,50 @@ button:disabled {
     --bs: min(100%, max(260px, calc(100dvh - 330px)))
   }
 }
+
+/* message line + turn pill with king */
+.msgrow {
+  display: flex;
+  align-items: center;
+  gap: 10px
+}
+
+.msgrow .msg {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  min-height: 2.8em;
+  display: flex;
+  align-items: center;
+  margin: 6px 2px
+}
+
+.turn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px 3px 4px;
+  flex: none
+}
+
+.kimg {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: contain
+}
+
+.turn.w .kimg {
+  background: #3a3a3a
+}
+
+.turn.b .kimg {
+  background: #e8e8e8
+}
+
+#bShare {
+  flex: none;
+  padding: 7px 14px
+}
