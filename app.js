@@ -403,7 +403,7 @@ function updateTurn() {
 }
 $('#bShare').onclick = async () => {
   if (!cur) return;
-  const text = `ChessPuzzle4U | Chess Puzzle by Dhananjay Patil.\n${SITE}#${cur.id}`;
+ const text = `ChessPuzzle4U | Sharpen your Chess skills.\n${SITE}#${cur.id}`;
   if (navigator.share) { try { await navigator.share({ text }); return; } catch (e) { if (e.name === 'AbortError') return; } }
   try { await navigator.clipboard.writeText(text); }
   catch { const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch { } ta.remove(); }
