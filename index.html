@@ -1,1 +1,122 @@
+<!doctype html>
+<html lang="en">
 
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>ChessPuzzle4U – Mate Puzzles</title>
+
+  <meta name="description"
+    content="ChessPuzzle4U | Chess Puzzle by Dhananjay Patil. Sharpen your skills with (mate-in 1 to 5) challenges using real-game positions">
+
+  <!-- Favicon in multiple formats for better browser compatibility -->
+  <link rel="icon" href="cons/brilliant.png" type="image/svg+xml">
+  <link rel="alternate icon" href="cons/brilliant.png" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="cons/brilliant.png">
+
+  <!-- Additional meta tags for better search engine visibility -->
+  <meta name="keywords" content="chess, puzzles, mate, checkmate, chess training, chess problems">
+  <meta name="author" content="Dhananjay Patil">
+  <meta property="og:title" content="ChessPuzzle4U">
+  <meta property="og:description" content="Sharpen your chess skills with mate-in 1 to 5 challenges">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="favicon.svg">
+
+  <link rel="icon" href="icons/brilliant.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <header>
+    <div class="brand"><img src="icons/brilliant.png" alt=""><b>ChessPuzzle<span>4U</span></b></div>
+    <div class="stats"><span id="stSolved">0 solved</span><span id="stStreak">🔥 0</span>
+      <button id="btnSet" class="ghost" title="Board &amp; pieces">⚙</button>
+      <button id="btnLogin" class="ghost">Admin</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="solver" class="card">
+      <div class="pinfo">
+        <div><b id="pTitle">Loading…</b>
+          <div id="pSub" class="mut"></div>
+        </div><span id="pTurn" class="turn"></span>
+      </div>
+
+      <!-- fixed square container: board + pieces always stay aligned -->
+      <div class="bwrap">
+        <div id="board" class="board"></div>
+        <div id="promo" class="promo hidden">
+          <div class="pbox"></div>
+        </div>
+      </div>
+
+      <div id="msg" class="msg">Choose a puzzle from the list.</div>
+      <div id="pager" class="pager"></div>
+      <div class="btns">
+        <button id="bHint">Hint</button><button id="bSol">Solution</button>
+        <button id="bReset">Retry</button><button id="bNext" class="pri">Next</button>
+      </div>
+      <div id="moves" class="moves"></div>
+    </section>
+
+    <section class="side">
+      <div class="search">
+        <div class="srow"><input id="qSearch" type="search" placeholder="Search by ID or player name..."
+            autocomplete="off">
+          <button id="qGo" class="pri">Search</button><button id="qClear" class="ghost" title="Clear">✕</button>
+        </div>
+        <div id="qRes" class="qres hidden"></div>
+      </div>
+      <div id="cats" class="cats"></div>
+      <div id="list" class="list"></div>
+    </section>
+
+    <section id="admin" class="card hidden">
+      <h3>Admin panel <button id="bLogout" class="ghost">Logout</button></h3>
+      <p class="mut">Paste puzzles in your <code>puzzle.js</code> format (one or many, JS or JSON), or import the file.
+        Moves are validated before saving.</p>
+      <textarea id="aText" rows="9" placeholder='{ id: 317, fen: "...", solution: ["Qh7+","Kf6"], ... },'></textarea>
+      <div class="btns">
+        <button id="aSave" class="pri">Validate &amp; save to Firebase</button>
+        <button id="aSeed">Upload built-in puzzles</button>
+        <label class="filebtn">📂 Import puzzle.js file<input id="aFile" type="file" accept=".js,.json,.txt"
+            hidden></label>
+      </div>
+      <details>
+        <summary>PGN ➜ puzzle (from chess.com)</summary>
+        <textarea id="pgn" rows="5" placeholder="Paste PGN"></textarea>
+        <div class="row"><label>Half-moves before puzzle <input id="ply" type="number" value="20" min="0"></label>
+          <label>Solution moves <input id="cnt" type="number" value="5" min="1"></label>
+          <button id="pgnGo">Generate</button>
+        </div>
+      </details>
+      <div id="amsg" class="msg"></div>
+    </section>
+  </main>
+
+  <dialog id="setDlg">
+    <h3>Settings <button id="setClose" class="ghost" type="button">✕</button></h3>
+    <div class="setlbl">Board : <b id="curBoard"></b></div>
+    <div id="boardOpts" class="opts"></div>
+    <div class="setlbl">Pieces : <b id="curPieces"></b></div>
+    <div id="pieceOpts" class="opts"></div>
+  </dialog>
+
+  <dialog id="dlg">
+    <form method="dialog" id="loginForm">
+      <h3>Admin login</h3>
+      <input id="lEmail" type="email" placeholder="Email" required autocomplete="username">
+      <input id="lPass" type="password" placeholder="Password" required autocomplete="current-password">
+      <div id="lMsg" class="msg"></div>
+      <div class="btns"><button type="button" id="lCancel">Cancel</button><button type="button" id="lForgot">Forgot
+          password</button><button class="pri" id="lGo">Login</button></div>
+    </form>
+  </dialog>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+
+</html>
