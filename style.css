@@ -851,5 +851,15 @@ button:disabled {
 
 #bShare {
   flex: none;
-  padding: 7px 14px
+  padding: 0;
+  border: 0;
+  background: none;
+  line-height: 0;
+  cursor: pointer
+}
+
+#bShare img {
+  display: block;
+  width: 22px;
+  height: 22px
 }
