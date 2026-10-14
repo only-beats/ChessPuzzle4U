@@ -66,7 +66,7 @@ let cur, game, sol, alt, tree, node, autoT, page = 0, promoMove = null, step = 0
 let wantId = +location.hash.slice(1) || +localStorage.cp4uLast;
 let prog = JSON.parse(localStorage.cp4u || '{"s":[],"streak":0}');
 const saveProg = () => { localStorage.cp4u = JSON.stringify(prog); stats(); };
-const stats = () => { $('#stSolved').innerHTML = '✅ ' + prog.s.length + '<span class="sl"> solved</span>'; $('#stStreak').textContent = '🔥 ' + prog.streak; };
+const stats = () => { $('#stSolved').textContent = '✅ ' + prog.s.length ; $('#stStreak').textContent = '🔥 ' + prog.streak ; };
 
 /* ---------- sound (files in Audio/, falls back to WebAudio beeps) ---------- */
 let ac;
@@ -90,7 +90,8 @@ function draw() {
     const coord = (f === 0 ? `<span class="co rk">${rank + 1}</span>` : '') + (r === 7 ? `<span class="co fl">${name}</span>` : '');
     const piece = pc ? `<img class="pc" src="${PIECE(pc.color, pc.type)}" alt="${pc.color}${pc.type}" draggable="false" decoding="sync" onerror="this.onerror=null;this.src='${LICHESS(pc.color, pc.type)}'">` : '';
     const badge = fbSq === sq ? `<img class="fbi" src="icons/${fbIcon}.png" alt="">` : '';
-    h += `<div class="${cls}" data-sq="${sq}">${coord}${piece}${badge}</div>`;
+    const logo = r === 7 && f === 0 ? '<img class="dlogo" src="src/dany-logo.png" alt="" draggable="false" onerror="this.remove()">' : '';
+    h += `<div class="${cls}" data-sq="${sq}">${logo}${coord}${piece}${badge}</div>`;
   }
   $('#board').innerHTML = h;
   $('#moves').innerHTML = log.map((s, i) => (i % 2 === 0 ? `<b>${Math.floor(i / 2) + 1}.</b> ` : '') + s).join(' ');
@@ -132,7 +133,7 @@ function open(p, scroll = false) {
   $('#promo').classList.add('hidden');
   $('#pTitle').textContent = `${p.white} vs ${p.black}`;
   $('#pSub').textContent = `#${p.id} · ${p.date || ''} · ${p.category || ''} · ${p.result || ''}`;
-  updateTurn();
+
   msg(p.description || 'Find the best moves.');
   const idx = filtered().findIndex(x => x.id === p.id); if (idx >= 0) page = Math.floor(idx / PER);
   draw(); renderList(); fitBoard(); localStorage.cp4uLast = p.id; history.replaceState(null, '', '#' + p.id);
@@ -529,7 +530,7 @@ $('#setDlg').onclick = e => {
   if (e.target === $('#setDlg')) return $('#setDlg').close();
   const b = e.target.closest('[data-b]'), p = e.target.closest('[data-p]');
   if (b) { cfg.board = b.dataset.b; localStorage.cp4uBoard = cfg.board; applyBoard(); renderSettings(); analysis.refresh(); }
-  if (p) { cfg.pieces = p.dataset.p; localStorage.cp4uPieces = cfg.pieces; preloadPieces(); renderSettings(); if (game) draw(); updateTurn(); analysis.refresh(); }
+  if (p) { cfg.pieces = p.dataset.p; localStorage.cp4uPieces = cfg.pieces; preloadPieces(); renderSettings(); if (game) draw(); analysis.refresh(); }
 };
 
 /* ---------- fit: on desktop the whole puzzle card (board + buttons) fits in one screen, no scrolling ---------- */
@@ -547,11 +548,7 @@ window.addEventListener('load', fitBoard); if (document.fonts && document.fonts.
 
 /* ---------- turn pill (king of the chosen piece set) + share ---------- */
 const SITE = 'https://only-beats.github.io/ChessPuzzle4U/';
-function updateTurn() {
-  const t = $('#pTurn');
-  t.className = 'turn ' + user;
-  t.innerHTML = `<img class="kimg" src="${PIECE(user, 'k')}" alt="" onerror="this.onerror=null;this.src='${LICHESS(user, 'k')}'"><span> to move</span>`;
-}
+
 $('#bShare').onclick = async () => {
   if (!cur) return;
   const text = `ChessPuzzle4U | Sharpen your Chess skills.\n${SITE}#${cur.id}`;
