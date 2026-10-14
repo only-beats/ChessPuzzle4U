@@ -70,16 +70,17 @@
         </div>
         <div id="qRes" class="qres hidden"></div>
       </div>
-      <div class="elo">
-        <span class="mut">Rating</span>
-        <select id="eloSel">
-          <option value="0">Any</option><option value="50">50+</option><option value="100">100+</option><option value="250">250+</option>
-          <option value="500">500+</option><option value="1000">1000+</option><option value="1500">1500+</option>
-        </select>
-        <input id="eloNum" type="number" min="0" step="50" inputmode="numeric" placeholder="min e.g. 1200">
-        <span class="mut">to</span>
-        <input id="eloMax" type="number" min="0" step="50" inputmode="numeric" placeholder="max">
-        <button id="eloGo" class="pri">Load</button>
+      <div class="elo hidden" id="eloBox">
+        <div class="elo-top">
+          <span class="mut">Rating</span><b id="eloTxt">Any rating</b>
+          <button id="eloReset" class="ghost" type="button">Reset</button>
+        </div>
+        <div class="rs">
+          <div class="rs-track"><div class="rs-fill" id="rsFill"></div></div>
+          <input type="range" id="eloA" aria-label="Lowest rating (A)">
+          <input type="range" id="eloB" aria-label="Highest rating (B)">
+        </div>
+        <div class="rs-ends"><span>Lowest <b id="eloLo">–</b></span><span>Highest <b id="eloHi">–</b></span></div>
       </div>
       <div id="cats" class="cats">
         <div class="cat"></div>
