@@ -1345,3 +1345,46 @@ body {
     grid-template-columns: 1fr
   }
 }
+
+.pstats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 6px;
+  flex: none;
+  min-width: 84px;
+  min-height: 34px;
+  font-size: 12px;
+  line-height: 1.25;
+  font-weight: 600;
+  color: var(--m);
+  white-space: nowrap
+}
+
+
+.pstats span {
+  display: flex;
+  align-items: center;
+  gap: 3px
+}
+
+.sti {
+  width: 14px;
+  height: 14px;
+  flex: none
+}
+
+.dlogo {
+  position: absolute;
+  inset: 10%;
+  width: 80%;
+  height: 80%;
+  object-fit: contain;
+  z-index: 0;
+  opacity: 0.3;
+  pointer-events: none;
+  -webkit-user-drag: none;
+  filter: drop-shadow(0 0 3px #000) drop-shadow(0 0 3px #000)
+    /* same dark glow as the 8 and h */
+}
