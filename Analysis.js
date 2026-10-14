@@ -118,6 +118,7 @@ export function initAnalysis(api) {
         <button type="button" data-act="seed">Upload built-in puzzles</button>
         <label class="filebtn">📂 Import puzzle.js / Lichess .csv<input id="anFile" type="file" accept=".js,.json,.txt,.csv" hidden></label>
         <button type="button" data-act="dl">⬇ Download database puzzles</button>
+        <label class="filebtn">🧩 Lichess .csv → GitHub file<input id="anCsv" type="file" accept=".csv,.txt" hidden></label>
       </div>
       <button type="button" class="pri" data-act="save">Save to Firebase</button>
       <div id="anMsg" class="msg"></div>
@@ -448,6 +449,11 @@ export function initAnalysis(api) {
         }
     });
 
+    $('#anCsv').addEventListener('change', async e => {
+        const f = e.target.files[0]; if (!f) return;
+        const r = await api.makeLichessFile(f, t => say(t));
+        say(api.status().text || 'Done.', r.n ? 'ok' : 'err'); e.target.value = '';
+    });
     $('#anFile').addEventListener('change', async e => {
         const f = e.target.files[0]; if (!f) return;
         say('Reading ' + f.name + '…'); await api.importFile(f);
