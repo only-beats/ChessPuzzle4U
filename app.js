@@ -66,7 +66,10 @@ let cur, game, sol, alt, tree, node, autoT, page = 0, promoMove = null, step = 0
 let wantId = +location.hash.slice(1) || +localStorage.cp4uLast;
 let prog = JSON.parse(localStorage.cp4u || '{"s":[],"streak":0}');
 const saveProg = () => { localStorage.cp4u = JSON.stringify(prog); stats(); };
-const stats = () => { $('#stSolved').textContent = '✅ ' + prog.s.length ; $('#stStreak').textContent = '🔥 ' + prog.streak ; };
+const stats = () => {
+  $('#stSolved').innerHTML = '<img class="sti" src="svg/checklist.svg" alt="solved"> ' + prog.s.length;
+  $('#stStreak').innerHTML = '<img class="sti" src="svg/fire.svg" alt="streak"> ' + prog.streak;
+};
 
 /* ---------- sound (files in Audio/, falls back to WebAudio beeps) ---------- */
 let ac;
