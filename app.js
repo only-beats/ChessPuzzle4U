@@ -182,10 +182,10 @@ const nextInList = () => { const l = filtered(), i = l.findIndex(p => p.id === c
 function finish() {
   done = true; sound('win');
   const nx = nextInList();
-  msg((wrong ? '🎉 Solved!' : '🏆 Perfect – solved without a mistake!') + (nx ? ' Loading next puzzle…' : ' 🎉 End of this category!'), 'ok');
+  msg((wrong ? 'Solved!' : 'Perfect – solved without a mistake!') + (nx ? ' Loading next puzzle…' : 'End of this category!'), 'ok');
   if (!prog.s.includes(cur.id)) prog.s.push(cur.id);
   prog.streak = wrong ? 0 : prog.streak + 1; saveProg(); renderList();
-  if (nx) { const id = cur.id; clearTimeout(autoT); autoT = setTimeout(() => { if (cur && cur.id === id && done) open(nx); }, 1800); }
+  if (nx) { const id = cur.id; clearTimeout(autoT); autoT = setTimeout(() => { if (cur && cur.id === id && done) open(nx); }, 2500); }
 }
 
 /* promotion chooser */
@@ -221,7 +221,7 @@ $('#bNext').onclick = () => {
 };
 $('#bSol').onclick = () => {
   if (!cur) return; open(cur); done = busy = true; msg('Solution:');
-  sol.forEach((s, i) => setTimeout(() => { const m = game.move(s, { sloppy: true }); if (!m) return; last = m; log.push(m.san); moveSound(m); draw(); }, 700 * (i + 1)));
+  sol.forEach((s, i) => setTimeout(() => { const m = game.move(s, { sloppy: true }); if (!m) return; last = m; log.push(m.san); moveSound(m); draw(); }, 850 * (i + 1)));
 };
 
 /* ---------- list ---------- */
@@ -437,7 +437,7 @@ $('#lGo').onclick = async e => {
   e.preventDefault();
   try {
     await F.signInWithEmailAndPassword(auth, $('#lEmail').value, $('#lPass').value); $('#dlg').close(); $('#lPass').value = ''; lmsg('', '');
-    setTimeout(() => !isAdmin && alert('Logged in, but this account is not in /admins. See README step 4.'), 1200);
+    setTimeout(() => !isAdmin && alert('Logged in, but this account is not in /admins.'), 1200);
   }
   catch (err) {
     lmsg(/network/.test(err.code) ? 'Network error.' : /unauthorized-domain/.test(err.code) ? 'Add this domain in Firebase > Authentication > Settings > Authorized domains.'
