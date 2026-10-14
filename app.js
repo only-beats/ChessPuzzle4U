@@ -38,7 +38,7 @@ async function loadFilePuzzles() {
   const want = wantId;
   try {
     const res = await fetch(PUZ_FILE + '?v=' + PUZ_VER);
-    if (!res.ok) return;
+    if (!res.ok) { msg('puzzles-lichess.js not found (HTTP ' + res.status + ')', 'err'); return; }
     const txt = await res.text();
     const rows = JSON.parse(txt.slice(txt.indexOf('['), txt.lastIndexOf(']') + 1));
     fileList = [];
@@ -54,7 +54,7 @@ async function loadFilePuzzles() {
     rebuild(); renderList();
     if (want && (!cur || cur.id !== want) && !step) { const w = puzzles.find(x => x.id === want); if (w) open(w); }
     if ($('#qSearch').value.trim()) runSearch();
-  } catch (e) { console.warn('puzzles-lichess.js not loaded', e); }
+  } catch (e) { msg('Could not load puzzles-lichess.js: ' + e.message, 'err'); console.warn(e); }
 }
 const PER = 5;                                                           // puzzles shown per page in the list
 const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
