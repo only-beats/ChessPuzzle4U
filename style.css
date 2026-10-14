@@ -1300,8 +1300,7 @@ body {
 /* ---- Analysis board: admin buttons layout (desktop + mobile) ---- */
 #analysis .an-tools {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  /* 3 buttons in one row on desktop */
+  grid-template-columns: repeat(3, minmax(0, 1fr));   /* 3 buttons in one row on desktop */
   gap: 8px;
   margin: 4px 0 6px;
   width: 100%
