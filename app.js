@@ -29,8 +29,24 @@ const PIECE = (c, t) => {
   return p.k === 'lichess' ? LICHESS(c, t) : `${CC}/pieces/${p.dir || p.k}/150/${c}${t}.png`;
 };
 const PIECE_PREVIEW = p => p.k === 'lichess' ? LICHESS('w', 'n') : `${CC}/pieces/${p.dir || p.k}/150/wn.png`;
+let fbList = [...SEED], fileList = [], fbIds = new Set();                  // fbList = Firebase (or built-in) puzzles, fileList = Lichess puzzles from the GitHub file
+function rebuild() {                                                       // merge both sources (Firebase wins when the same id exists in both)
+  const m = new Map(); fileList.forEach(p => m.set(p.id, p)); fbList.forEach(p => m.set(p.id, p));
+  puzzles = [...m.values()].sort((x, y) => x.id - y.id); setupElo();
+}
+async function loadFilePuzzles() {
+  const want = wantId;                                                     // puzzle id from the page link (#123), if any
+  try {
+    const m = await import(PUZ_FILE);
+    fileList = (m.SEED || []).filter(p => p && p.fen && p.lichess).map(p => ({ ...p, id: +p.id, white: 'Unknown', black: 'Unknown' }));
+    rebuild(); renderList();
+    if (want && (!cur || cur.id !== want) && !step) { const w = puzzles.find(x => x.id === want); if (w) open(w); }
+    if ($('#qSearch').value.trim()) runSearch();
+  } catch { /* no puzzles-lichess.js yet – that is fine */ }
+}
 const PER = 5;                                                           // puzzles shown per page in the list
 const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+const PUZ_FILE = './puzzles-lichess.js';                                  // Lichess puzzles are read from this file in the GitHub repo
 const FB = !String(firebaseConfig.apiKey).startsWith('PASTE');
 
 let puzzles = [...SEED], db = null, auth = null, F = {}, isAdmin = false, catK = 0;
@@ -228,23 +244,38 @@ function enhanceSelect(sel) {
   };
   sel._sync = sync; sync();
 }
-['#eloSel', '#dCat', '#dSrc'].forEach(q => enhanceSelect($(q)));
+['#dCat', '#dSrc'].forEach(q => enhanceSelect($(q)));
 
-/* rating filter: pick a preset or type min / max, then the first matching puzzle loads */
-function applyElo() {
-  minElo = Math.max(0, Math.floor(+$('#eloNum').value) || 0); maxElo = Math.max(0, Math.floor(+$('#eloMax').value) || 0); page = 0;
-  if (maxElo && maxElo < minElo) [minElo, maxElo] = [maxElo, minElo];
-  $('#eloNum').value = minElo || ''; $('#eloMax').value = maxElo || '';
-  $('#eloSel').value = !maxElo && [...$('#eloSel').options].some(o => +o.value === minElo) ? minElo : '0'; $('#eloSel')._sync();
-  const f = filtered()[0]; if (f) open(f, true); else { renderList(); msg(`No puzzles with ${eloText()} here – change the numbers or category.`, 'err'); }
+/* rating slider: A = lowest point, B = highest point; limits are the lowest / highest rated puzzle that exists */
+const eloA = $('#eloA'), eloB = $('#eloB');
+let eloLo = 0, eloHi = 0;
+function paintElo() {
+  const a = +eloA.value, b = +eloB.value, span = Math.max(1, eloHi - eloLo);
+  $('#rsFill').style.left = (a - eloLo) / span * 100 + '%'; $('#rsFill').style.width = (b - a) / span * 100 + '%';
+  $('#eloTxt').textContent = a <= eloLo && b >= eloHi ? 'Any rating' : `${a} – ${b}`;
+  eloA.style.zIndex = a > eloLo + span / 2 ? 4 : 3;                         // when both thumbs meet, the one that can still move stays on top
 }
-$('#eloSel').onchange = e => { $('#eloNum').value = +e.target.value || ''; $('#eloMax').value = ''; applyElo(); };
-$('#eloGo').onclick = applyElo;
-$('#eloNum').onkeydown = $('#eloMax').onkeydown = e => { if (e.key === 'Enter') applyElo(); };
+function setupElo() {
+  let lo = 0, hi = 0;
+  for (const p of puzzles) { const r = p.rating || 0; if (r > 0) { lo = lo ? Math.min(lo, r) : r; hi = Math.max(hi, r); } }
+  eloLo = lo; eloHi = hi; $('#eloBox').classList.toggle('hidden', !hi);
+  for (const el of [eloA, eloB]) { el.min = lo; el.max = hi; el.step = 1; }
+  eloA.value = minElo ? Math.max(lo, Math.min(minElo, hi)) : lo; eloB.value = maxElo ? Math.min(hi, Math.max(maxElo, lo)) : hi;
+  $('#eloLo').textContent = lo; $('#eloHi').textContent = hi; paintElo();
+}
+function applyElo() {
+  const a = +eloA.value, b = +eloB.value;
+  minElo = a > eloLo ? a : 0; maxElo = b < eloHi ? b : 0; page = 0; paintElo();
+  const f = filtered()[0]; if (f) open(f, true); else { renderList(); msg(`No puzzles with ${eloText()} here – move the slider or change category.`, 'err'); }
+}
+eloA.oninput = () => { if (+eloA.value > +eloB.value) eloA.value = eloB.value; paintElo(); };
+eloB.oninput = () => { if (+eloB.value < +eloA.value) eloB.value = eloA.value; paintElo(); };
+eloA.onchange = eloB.onchange = applyElo;                                   // load a puzzle when the thumb is released
+$('#eloReset').onclick = () => { eloA.value = eloLo; eloB.value = eloHi; applyElo(); };
 $('#list').onclick = async e => {
   const p = id => puzzles.find(x => x.id === +id);
   if (e.target.dataset.s) { const i = +e.target.dataset.s; e.target.checked ? picked.add(i) : picked.delete(i); return delUi(); }
-  if (e.target.dataset.x) { if (confirm('Delete puzzle #' + e.target.dataset.x + '?')) await F.remove(F.ref(db, 'puzzles/' + e.target.dataset.x)); return; }
+  if (e.target.dataset.x) { if (!fbIds.has(+e.target.dataset.x)) return alert('This puzzle comes from the GitHub file (' + PUZ_FILE.slice(2) + ') – remove it there.'); if (confirm('Delete puzzle #' + e.target.dataset.x + '?')) await F.remove(F.ref(db, 'puzzles/' + e.target.dataset.x)); return; }
   if (e.target.dataset.e) { const pz = p(e.target.dataset.e); analysis.loadPuzzle(pz); return; }
   const c = e.target.closest('.pcard'); if (c) open(p(c.dataset.id), true);
 };
@@ -309,11 +340,13 @@ const amsg = (t, c) => { $('#amsg').textContent = t; $('#amsg').className = 'msg
 const delUi = () => { const b = $('#dSel'); if (b) b.textContent = `Delete ticked (${picked.size})`; };
 async function removeIds(ids, label) {
   if (!isAdmin) return amsg('Admin login required.', 'err');
-  if (!ids.length) return amsg('Nothing to delete.', 'err');
-  if (!confirm(`Delete ${ids.length} puzzle(s)${label ? ' – ' + label : ''}? This cannot be undone.`)) return;
+  const del = ids.filter(id => fbIds.has(id)), fileOnly = ids.length - del.length;     // puzzles that come from the GitHub file can't be deleted here
+  if (!del.length) return amsg(fileOnly ? `These ${fileOnly} puzzle(s) come from ${PUZ_FILE.slice(2)} on GitHub – remove them by editing that file.` : 'Nothing to delete.', 'err');
+  if (!confirm(`Delete ${del.length} puzzle(s) from Firebase${label ? ' – ' + label : ''}? This cannot be undone.`)) return;
   try {
-    for (let i = 0; i < ids.length; i += 500) { const up = {}; ids.slice(i, i + 500).forEach(id => up[id] = null); await F.update(F.ref(db, 'puzzles'), up); }
-    ids.forEach(id => picked.delete(id)); delUi(); amsg(`✔ Deleted ${ids.length} puzzle(s).`, 'ok');
+    for (let i = 0; i < del.length; i += 500) { const up = {}; del.slice(i, i + 500).forEach(id => up[id] = null); await F.update(F.ref(db, 'puzzles'), up); }
+    ids.forEach(id => picked.delete(id)); delUi();
+    amsg(`✔ Deleted ${del.length} puzzle(s) from Firebase.` + (fileOnly ? ` ${fileOnly} come from the GitHub file and were skipped.` : ''), 'ok');
   } catch (e) { amsg('✖ ' + e.message, 'err'); }
 }
 $('#dSel').onclick = () => removeIds([...picked], 'ticked ones');
@@ -382,7 +415,8 @@ async function initFirebase() {
   const a = app.initializeApp(firebaseConfig); auth = A.getAuth(a); db = D.getDatabase(a); F = { ...A, ...D };
   D.onValue(D.ref(db, 'puzzles'), s => {
     const v = s.val();
-    if (v) puzzles = Object.entries(v).filter(([, p]) => p && p.fen).map(([k, p]) => ({ ...p, id: +(p.id ?? k), ...(p.lichess ? { white: 'Unknown', black: 'Unknown' } : {}) })).sort((x, y) => x.id - y.id);
+    if (v) { fbList = Object.entries(v).filter(([, p]) => p && p.fen).map(([k, p]) => ({ ...p, id: +(p.id ?? k), ...(p.lichess ? { white: 'Unknown', black: 'Unknown' } : {}) })).sort((x, y) => x.id - y.id); fbIds = new Set(fbList.map(p => p.id)); } else fbIds = new Set();
+    rebuild();
     renderList();
     if (wantId && cur && cur.id !== wantId && !step) { const w = puzzles.find(x => x.id === wantId); if (w) open(w); }
     wantId = 0; if ($('#qSearch').value.trim()) runSearch();
@@ -503,5 +537,5 @@ const analysis = initAnalysis({
 game = new Chess(); user = 'w'; flip = false; draw();                      // empty-puzzle start position so the board is never blank
 preloadPieces(); stats(); applyBoard(); renderList();
 { const p = puzzles.find(x => x.id === wantId) || puzzles.find(x => !prog.s.includes(x.id)) || puzzles[0]; if (p) open(p); }
-fitBoard(); initFirebase();
+fitBoard(); loadFilePuzzles(); initFirebase();
 document.body.classList.remove('sk-on');                                   // skeleton off: the real page is ready
