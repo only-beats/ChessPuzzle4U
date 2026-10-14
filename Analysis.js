@@ -80,8 +80,8 @@ export function initAnalysis(api) {
       <div class="an-l">FEN of the position on the board now</div>
       <input id="anCur" readonly>
       <div id="anMovesBox">
-        <div class="an-l">Moves (click a move to jump to it; a different move at the same spot becomes a variation)</div>
-         <div class="an-l" style="margin-top:8px">
+        <div class="an-l">Moves (click a move to jump to it; a different move at the same spot becomes a variation)</div> 
+        <div class="an-l" style="margin-top:8px">
         <div id="anMoves" class="an-moves"></div>
         <div class="an-row" style="margin-top:8px"><button type="button" data-act="del">Delete this move</button><button type="button" data-act="main">Make main line</button></div>
         <div class="an-row" style="margin-top:10px">
@@ -93,7 +93,9 @@ export function initAnalysis(api) {
         </div>
         <div id="anLines" class="an-lines"></div>
       </div>
+       <div class="an-l" style="margin-top:8px">
       <div class="an-l">PGN (with FEN header and variations)</div>
+       <div class="an-l" style="margin-top:8px">
       <textarea id="anPgn" rows="6" readonly spellcheck="false"></textarea>
       <div class="an-meta">
         <label>ID<input id="anId" type="number" min="1"></label>
@@ -103,6 +105,7 @@ export function initAnalysis(api) {
         <label>Result<select id="anRes"><option>1-0</option><option>0-1</option></select></label>
       </div>
       <div class="an-l">Puzzle code (same format as puzzles-seed.js)</div>
+       <div class="an-l" style="margin-top:8px">
       <textarea id="anCode" rows="4" readonly spellcheck="false"></textarea>
       <div class="an-row">
         <button type="button" data-act="copyfen">Copy FEN</button><button type="button" data-act="copypgn">Copy PGN</button>
