@@ -11,7 +11,7 @@ export const firebaseConfig = {
 };
 export const SOUNDS = {
   move: "Audio/move.mp3", capture: "Audio/capture.mp3", check: "Audio/check.mp3",
-  correct: "Audio/correct.mp3", wrong: "Audio/wrong.mp3", win: "Audio/gameend.mp3", promote: "Audio/promote.mp3"
+  correct: "Audio/correct.mp3", wrong: "Audio/illegal.mp3", win: "Audio/gameend.mp3", promote: "Audio/promote.mp3"
 };
 export const CATS = [
   { k: 0, label: "All", img: "Mate/logoAll.png" },
