@@ -663,6 +663,7 @@ code {
   }
 }
 
+
 @media(max-width:480px) {
   .btns button {
     flex: 1 1 45%;
@@ -686,8 +687,21 @@ code {
     height: 50px
   }
 
-  .stats #stSolved {
+  .stats #stSolved .sl {
     display: none
+  }
+
+  .brand {
+    font-size: 15px;
+    gap: 6px
+  }
+
+  .brand img {
+    width: 26px
+  }
+
+  .stats {
+    gap: 6px
   }
 
   input,
@@ -1300,7 +1314,8 @@ body {
 /* ---- Analysis board: admin buttons layout (desktop + mobile) ---- */
 #analysis .an-tools {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));   /* 3 buttons in one row on desktop */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* 3 buttons in one row on desktop */
   gap: 8px;
   margin: 4px 0 6px;
   width: 100%
