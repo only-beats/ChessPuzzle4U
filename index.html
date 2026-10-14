@@ -27,7 +27,7 @@
 <body class="sk-on">
   <header>
     <div class="brand"><img src="icons/brilliant.png" alt=""><b>ChessPuzzle<span>4U</span></b></div>
-    <div class="stats"><span id="stSolved">0 solved</span><span id="stStreak">🔥 0</span>
+    <div class="stats">
       <button id="btnSet" class="ghost" title="Board &amp; pieces">⚙</button>
       <button id="btnLogin" class="ghost">Admin</button>
     </div>
@@ -52,7 +52,8 @@
 
       <div class="msgrow">
         <div id="msg" class="msg">Choose a puzzle from the list.</div>
-        <span id="pTurn" class="turn w"><span> to move</span></span>
+        <div class="pstats"><span id="stSolved"><img class="sti" src="svg/checklist.svg" alt="solved"> 00</span><span
+            id="stStreak"><img class="sti" src="svg/fire.svg" alt="streak"> 00</span></div>
       </div>
       <div id="pager" class="pager"><button disabled>Prev</button><span></span><button disabled>Next</button></div>
       <div class="btns">
@@ -76,7 +77,9 @@
           <button id="eloReset" class="ghost" type="button">Reset</button>
         </div>
         <div class="rs">
-          <div class="rs-track"><div class="rs-fill" id="rsFill"></div></div>
+          <div class="rs-track">
+            <div class="rs-fill" id="rsFill"></div>
+          </div>
           <input type="range" id="eloA" aria-label="Lowest rating (A)">
           <input type="range" id="eloB" aria-label="Highest rating (B)">
         </div>
@@ -103,13 +106,24 @@
       <h3>Admin panel <button id="bLogout" class="ghost">Logout</button></h3>
       <div class="delbox">
         <div class="delhead">🗑 Delete puzzles</div>
-        <p class="mut">Tick puzzles in the list (checkbox on each card), or delete many at once. Newest puzzles are deleted first.</p>
+        <p class="mut">Tick puzzles in the list (checkbox on each card), or delete many at once. Newest puzzles are
+          deleted first.</p>
         <div class="delgrid">
           <label>Category
-            <select id="dCat"><option value="0">All</option><option value="1">Mate in 1</option><option value="2">Mate in 2</option><option value="3">Mate in 3</option><option value="4">Mate in 4</option><option value="5">Mate in 5</option></select>
+            <select id="dCat">
+              <option value="0">All</option>
+              <option value="1">Mate in 1</option>
+              <option value="2">Mate in 2</option>
+              <option value="3">Mate in 3</option>
+              <option value="4">Mate in 4</option>
+              <option value="5">Mate in 5</option>
+            </select>
           </label>
           <label>Source
-            <select id="dSrc"><option value="lichess">Lichess only</option><option value="all">All puzzles</option></select>
+            <select id="dSrc">
+              <option value="lichess">Lichess only</option>
+              <option value="all">All puzzles</option>
+            </select>
           </label>
           <label>How many (0 = all)
             <input id="dNum" type="number" value="0" min="0">
