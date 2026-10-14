@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>ChessPuzzle4U – Mate Puzzles</title>
+
+  <meta name="description"
+    content="ChessPuzzle4U | Chess Puzzle by Dhananjay Patil. Sharpen your skills with (mate-in 1 to 5) challenges using real-game positions">
+
+  <!-- Favicon -->
+  <link rel="icon" href="icons/brilliant.png">
+  <link rel="apple-touch-icon" href="icons/brilliant.png">
+
+  <meta name="keywords" content="chess, puzzles, mate, checkmate, chess training, chess problems">
+  <meta name="author" content="Dhananjay Patil">
+  <meta property="og:title" content="ChessPuzzle4U">
+  <meta property="og:description" content="Sharpen your chess skills with mate-in 1 to 5 challenges">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="icons/brilliant.png">
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body class="sk-on">
+  <header>
+    <div class="brand"><img src="icons/brilliant.png" alt=""><b>ChessPuzzle<span>4U</span></b></div>
+    <div class="stats"><span id="stSolved">0 solved</span><span id="stStreak">🔥 0</span>
+      <button id="btnSet" class="ghost" title="Board &amp; pieces">⚙</button>
+      <button id="btnLogin" class="ghost">Admin</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="solver" class="card">
+      <div class="pinfo">
+        <div><b id="pTitle">Loading…</b>
+          <div id="pSub" class="mut"></div>
+        </div><button id="bShare" class="ghost" type="button" aria-label="Share"><img src="svg/Share.svg" alt="Share"
+            width="20" height="20"></button>
+      </div>
+
+      <!-- fixed square container: board + pieces always stay aligned -->
+      <div class="bwrap">
+        <div id="board" class="board"></div>
+        <div id="promo" class="promo hidden">
+          <div class="pbox"></div>
+        </div>
+      </div>
+
+      <div class="msgrow">
+        <div id="msg" class="msg">Choose a puzzle from the list.</div>
+        <span id="pTurn" class="turn w"><span> to move</span></span>
+      </div>
+      <div id="pager" class="pager"><button disabled>Prev</button><span></span><button disabled>Next</button></div>
+      <div class="btns">
+        <button id="bHint">Hint</button><button id="bSol">Solution</button>
+        <button id="bReset">Retry</button><button id="bNext" class="pri">Next</button>
+      </div>
+      <div id="moves" class="moves"></div>
+    </section>
+
+    <section class="side">
+      <div class="search">
+        <div class="srow"><input id="qSearch" type="search" placeholder="Search by ID or player name..."
+            autocomplete="off">
+          <button id="qGo" class="pri">Search</button><button id="qClear" class="ghost" title="Clear">✕</button>
+        </div>
+        <div id="qRes" class="qres hidden"></div>
+      </div>
+      <div class="elo">
+        <span class="mut">Rating</span>
+        <select id="eloSel">
+          <option value="0">Any</option><option value="50">50+</option><option value="100">100+</option><option value="250">250+</option>
+          <option value="500">500+</option><option value="1000">1000+</option><option value="1500">1500+</option>
+        </select>
+        <input id="eloNum" type="number" min="0" step="50" inputmode="numeric" placeholder="min e.g. 1200">
+        <span class="mut">to</span>
+        <input id="eloMax" type="number" min="0" step="50" inputmode="numeric" placeholder="max">
+        <button id="eloGo" class="pri">Load</button>
+      </div>
+      <div id="cats" class="cats">
+        <div class="cat"></div>
+        <div class="cat"></div>
+        <div class="cat"></div>
+        <div class="cat"></div>
+        <div class="cat"></div>
+        <div class="cat"></div>
+      </div>
+      <div id="list" class="list">
+        <div class="pcard"></div>
+        <div class="pcard"></div>
+        <div class="pcard"></div>
+        <div class="pcard"></div>
+        <div class="pcard"></div>
+      </div>
+    </section>
+
+    <section id="admin" class="card hidden">
+      <h3>Admin panel <button id="bLogout" class="ghost">Logout</button></h3>
+      <div class="delbox">
+        <div class="delhead">🗑 Delete puzzles</div>
+        <p class="mut">Tick puzzles in the list (checkbox on each card), or delete many at once. Newest puzzles are deleted first.</p>
+        <div class="delgrid">
+          <label>Category
+            <select id="dCat"><option value="0">All</option><option value="1">Mate in 1</option><option value="2">Mate in 2</option><option value="3">Mate in 3</option><option value="4">Mate in 4</option><option value="5">Mate in 5</option></select>
+          </label>
+          <label>Source
+            <select id="dSrc"><option value="lichess">Lichess only</option><option value="all">All puzzles</option></select>
+          </label>
+          <label>How many (0 = all)
+            <input id="dNum" type="number" value="0" min="0">
+          </label>
+          <button id="dGo" class="danger">Delete matching</button>
+        </div>
+        <div class="delbtns">
+          <button id="dAll">Tick all in current category</button>
+          <button id="dNone">Untick all</button>
+          <button id="dSel" class="danger">Delete ticked (0)</button>
+        </div>
+      </div>
+      <div id="amsg" class="msg"></div>
+    </section>
+
+    <!-- admin-only board editor / analysis (built by Analysis.js) -->
+    <section id="analysis" class="card hidden"></section>
+  </main>
+
+  <dialog id="setDlg">
+    <h3>Settings <button id="setClose" class="ghost" type="button">✕</button></h3>
+    <div class="setlbl">Board : <b id="curBoard"></b></div>
+    <div id="boardOpts" class="opts"></div>
+    <div class="setlbl">Pieces : <b id="curPieces"></b></div>
+    <div id="pieceOpts" class="opts"></div>
+  </dialog>
+
+  <dialog id="dlg">
+    <form method="dialog" id="loginForm">
+      <h3>Only for Admin login</h3>
+      <input id="lEmail" type="email" placeholder="Email" required autocomplete="username">
+      <input id="lPass" type="password" placeholder="Password" required autocomplete="current-password">
+      <div id="lMsg" class="msg"></div>
+      <div class="btns"><button type="button" id="lCancel">Cancel</button><button type="button" id="lForgot">Forgot
+          password</button><button class="pri" id="lGo">Login</button></div>
+    </form>
+  </dialog>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+
+</html>
