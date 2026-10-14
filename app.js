@@ -35,18 +35,30 @@ function rebuild() {                                                       // me
   puzzles = [...m.values()].sort((x, y) => x.id - y.id); setupElo();
 }
 async function loadFilePuzzles() {
-  const want = wantId;                                                     // puzzle id from the page link (#123), if any
+  const want = wantId;
   try {
-    const m = await import(PUZ_FILE);
-    fileList = (m.SEED || []).filter(p => p && p.fen && p.lichess).map(p => ({ ...p, id: +p.id, white: 'Unknown', black: 'Unknown' }));
+    const res = await fetch(PUZ_FILE + '?v=' + PUZ_VER);
+    if (!res.ok) return;
+    const txt = await res.text();
+    const rows = JSON.parse(txt.slice(txt.indexOf('['), txt.lastIndexOf(']') + 1));
+    fileList = [];
+    for (const p of rows) {
+      if (!p || !p.fen || !p.lichess) continue;
+      const mate = /\d/.exec(p.category || ''), side = String(p.fen).split(' ')[1] === 'b' ? 'Black' : 'White';
+      fileList.push({
+        result: '', date: 'Rating ' + (p.rating || ''), category: 'Tactic',
+        description: `${side} to move${mate ? ' and mate in ' + mate[0] : ' – find the best moves'}.`,
+        ...p, id: +p.id, white: 'Unknown', black: 'Unknown'
+      });
+    }
     rebuild(); renderList();
     if (want && (!cur || cur.id !== want) && !step) { const w = puzzles.find(x => x.id === want); if (w) open(w); }
     if ($('#qSearch').value.trim()) runSearch();
-  } catch { /* no puzzles-lichess.js yet – that is fine */ }
+  } catch (e) { console.warn('puzzles-lichess.js not loaded', e); }
 }
 const PER = 5;                                                           // puzzles shown per page in the list
 const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-const PUZ_FILE = './puzzles-lichess.js';                                  // Lichess puzzles are read from this file in the GitHub repo
+const PUZ_VER = 1;   // change to 2, 3 ... each time you upload a new puzzles-lichess.js
 const FB = !String(firebaseConfig.apiKey).startsWith('PASTE');
 
 let puzzles = [...SEED], db = null, auth = null, F = {}, isAdmin = false, catK = 0;
@@ -54,7 +66,7 @@ let cur, game, sol, alt, tree, node, autoT, page = 0, promoMove = null, step = 0
 let wantId = +location.hash.slice(1) || +localStorage.cp4uLast;
 let prog = JSON.parse(localStorage.cp4u || '{"s":[],"streak":0}');
 const saveProg = () => { localStorage.cp4u = JSON.stringify(prog); stats(); };
-const stats = () => { $('#stSolved').textContent = prog.s.length + ' solved'; $('#stStreak').textContent = '🔥 ' + prog.streak; };
+const stats = () => { $('#stSolved').innerHTML = '✅ ' + prog.s.length + '<span class="sl"> solved</span>'; $('#stStreak').textContent = '🔥 ' + prog.streak; };
 
 /* ---------- sound (files in Audio/, falls back to WebAudio beeps) ---------- */
 let ac;
@@ -209,8 +221,8 @@ $('#bSol').onclick = () => {
 };
 
 /* ---------- list ---------- */
-const catOf = p => +((p.category || '').match(/\d+/) || [0])[0];
-const picked = new Set();                                                 // admin: puzzles ticked for bulk delete
+const _k = new WeakMap();
+const catOf = p => { let k = _k.get(p); if (k === undefined) { k = +((p.category || '').match(/\d+/) || [0])[0]; _k.set(p, k); } return k; }; const picked = new Set();                                                 // admin: puzzles ticked for bulk delete
 let minElo = 0, maxElo = 0;                                               // rating filter (Lichess puzzles carry a rating)
 const filtered = () => puzzles.filter(p => (!catK || catOf(p) === catK)
   && (!(minElo || maxElo) || ((p.rating || 0) > 0 && (p.rating || 0) >= minElo && (!maxElo || p.rating <= maxElo))));
@@ -236,7 +248,7 @@ function enhanceSelect(sel) {
   w.className = 'dd'; btn.type = 'button'; btn.className = 'dd-btn'; menu.className = 'dd-menu hidden';
   menu.innerHTML = [...sel.options].map((o, i) => `<li data-i="${i}">${esc(o.text)}</li>`).join('');
   sel.before(w); w.append(btn, menu, sel); sel.style.display = 'none';
-  const sync = () => { btn.textContent = sel.options[sel.selectedIndex]?.text || ''; [...menu.children].forEach((li, i) => li.classList.toggle('on', i === sel.selectedIndex)); };
+  const sync = () => { btn.textContent = sel.options[sel.selectedIndex]?.text || '';[...menu.children].forEach((li, i) => li.classList.toggle('on', i === sel.selectedIndex)); };
   btn.onclick = e => { e.stopPropagation(); const open = menu.classList.contains('hidden'); closeDd(); if (open) menu.classList.remove('hidden'); };
   menu.onclick = e => {
     e.preventDefault(); e.stopPropagation(); const li = e.target.closest('li'); if (!li) return;
@@ -286,26 +298,37 @@ $('#list').onclick = async e => {
    Lichess FEN is the position BEFORE the opponent's last move: Moves[0] is played automatically, the solver then plays Moves[1], Moves[2]... (UCI). */
 const isLichessCsv = t => /^[\w-]{3,8},[^,\s]+\/[^,]+,[a-h][1-8][a-h][1-8]/m.test(t);
 const uci = m => ({ from: m.slice(0, 2), to: m.slice(2, 4), promotion: m[4] || undefined });
+function lichessRow(line, have, takeId) {
+  const c = line.trim().split(',');
+  if (c.length < 8 || !/^[a-h][1-8][a-h][1-8]/.test(c[2])) return null;
+  const [lid, fen, mv, rating, , , , themes, url] = c;
+  const g = new Chess(fen), m = mv.trim().split(/\s+/);
+  if (!g.move(uci(m.shift()))) return null;
+  const start = g.fen(), sol = [];
+  for (const u of m) { const x = g.move(uci(u)); if (!x) return null; sol.push(x.san); }
+  if (!sol.length) return null;
+  const mate = (themes.match(/mateIn(\d)/) || [])[1], side = start.split(' ')[1] === 'w' ? 'White' : 'Black';
+  return {
+    id: have.get(lid) ?? takeId(), date: 'Rating ' + rating, white: 'Unknown', black: 'Unknown', result: '', fen: start, solution: sol,
+    category: mate ? 'Mate in ' + mate : 'Tactic',
+    description: `${side} to move${mate ? ' and mate in ' + mate : ' – find the best moves'}.`,
+    lichess: lid, rating: +rating || 0, themes, url: url || ''
+  };
+}
+const lichessIds = () => new Map(puzzles.filter(p => p.lichess).map(p => [p.lichess, p.id]));
 function fromLichess(t) {
-  const out = [], have = new Map(puzzles.filter(p => p.lichess).map(p => [p.lichess, p.id])); let id = nextId();
-  for (const line of t.split(/\r?\n/)) {
-    const c = line.trim().split(',');
-    if (c.length < 8 || !/^[a-h][1-8][a-h][1-8]/.test(c[2])) continue;               // header / blank / junk line
-    const [lid, fen, mv, rating, , , , themes, url] = c;
-    const g = new Chess(fen), m = mv.trim().split(/\s+/);
-    if (!g.move(uci(m.shift()))) continue;                                            // opponent's setup move
-    const start = g.fen(), sol = [];
-    for (const u of m) { const x = g.move(uci(u)); if (!x) { sol.length = 0; break; } sol.push(x.san); }
-    if (!sol.length) continue;
-    const mate = (themes.match(/mateIn(\d)/) || [])[1], side = start.split(' ')[1] === 'w' ? 'White' : 'Black';
-    out.push({
-      id: have.get(lid) ?? id++, date: 'Rating ' + rating, white: 'Unknown', black: 'Unknown', result: '', fen: start, solution: sol,
-      category: mate ? 'Mate in ' + mate : 'Tactic',
-      description: `${side} to move${mate ? ' and mate in ' + mate : ' – find the best moves'}.`,
-      lichess: lid, rating: +rating || 0, themes, url: url || ''
-    });
-  }
+  const out = [], have = lichessIds(); let id = nextId();
+  for (const line of t.split(/\r?\n/)) { const p = lichessRow(line, have, () => id++); if (p) out.push(p); }
   if (!out.length) throw Error('No new Lichess puzzles found in that text.');
+  return out;
+}
+async function fromLichessAsync(t, onProgress) {
+  const lines = t.split(/\r?\n/), out = [], have = lichessIds(); let id = nextId();
+  for (let i = 0; i < lines.length; i++) {
+    const p = lichessRow(lines[i], have, () => id++); if (p) out.push(p);
+    if (i % 500 === 499) { if (onProgress) onProgress(i + 1, lines.length, out.length); await new Promise(r => setTimeout(r)); }
+  }
+  if (!out.length) throw Error('No Lichess puzzles found in that file.');
   return out;
 }
 function parsePuzzles(t) {
@@ -316,7 +339,7 @@ function parsePuzzles(t) {
   const j = t.replace(/([{,]\s*)([A-Za-z_]\w*)\s*:/g, '$1"$2":').replace(/,(\s*[\]}])/g, '$1').replace(/,\s*$/, '');
   return JSON.parse(j.startsWith('[') ? j : '[' + j + ']');
 }
-const nextId = () => Math.max(0, ...puzzles.map(p => p.id)) + 1;
+const nextId = () => puzzles.reduce((m, p) => Math.max(m, p.id), 0) + 1;
 function validate(p) {
   let sl = p.solution, pgn = '';
   if (p.pgn) { const t = parseTree(p.pgn); if (!t.kids.length) throw Error('Empty pgn line in puzzle ' + (p.id || '(new)')); sl = mainLine(t); pgn = String(p.pgn).trim(); }
@@ -378,6 +401,20 @@ function downloadAll() {
   a.href = URL.createObjectURL(new Blob(['export const SEED = ' + JSON.stringify(l, null, 1) + ';\n'], { type: 'text/javascript' })); a.download = name;
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   return { n: l.length, name };
+}
+async function makeLichessFile(f, onProgress) {
+  const tell = t => { amsg(t); if (onProgress) onProgress(t); };
+  try {
+    tell('Reading ' + f.name + '…');
+    const text = await f.text();
+    const list = await fromLichessAsync(text, (i, n, ok) => tell(`Converting… ${i.toLocaleString()} / ${n.toLocaleString()} rows (${ok.toLocaleString()} puzzles) – keep this tab open`));
+    const rows = list.map(p => '  ' + JSON.stringify({ id: p.id, fen: p.fen, solution: p.solution, lichess: p.lichess, rating: p.rating, category: p.category }));
+    const blob = new Blob(['export const SEED = [\n', rows.join(',\n'), '\n];\n'], { type: 'text/javascript' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'puzzles-lichess.js';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    tell(`⬇ Done: ${list.length.toLocaleString()} puzzles, ${(blob.size / 1048576).toFixed(1)} MB → puzzles-lichess.js. Put it in your GitHub repo next to index.html.`);
+    return { n: list.length };
+  } catch (err) { tell('✖ ' + err.message); return { n: 0 }; }
 }
 async function importFile(f) {                                              // used by the Analysis board "Import" button
   try { const list = parsePuzzles(await f.text()); amsg(`Read ${list.length} puzzle(s) from ${f.name} – saving...`, 'ok'); await savePuzzles(list); }
@@ -528,7 +565,7 @@ $('#bShare').onclick = async () => {
 const analysis = initAnalysis({
   PIECE, LICHESS, parseTree, validate, savePuzzles, nextId,
   has: id => puzzles.some(p => p.id === id),
-  importFile, seed: () => savePuzzles(SEED), download: downloadAll,
+  importFile, makeLichessFile, seed: () => savePuzzles(SEED), download: downloadAll,
   current: () => cur,
   status: () => ({ text: $('#amsg').textContent, cls: $('#amsg').className })
 });
