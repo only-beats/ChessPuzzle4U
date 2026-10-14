@@ -81,6 +81,7 @@ export function initAnalysis(api) {
       <input id="anCur" readonly>
       <div id="anMovesBox">
         <div class="an-l">Moves (click a move to jump to it; a different move at the same spot becomes a variation)</div>
+         <div class="an-l" style="margin-top:8px">
         <div id="anMoves" class="an-moves"></div>
         <div class="an-row" style="margin-top:8px"><button type="button" data-act="del">Delete this move</button><button type="button" data-act="main">Make main line</button></div>
         <div class="an-row" style="margin-top:10px">
