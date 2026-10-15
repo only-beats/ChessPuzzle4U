@@ -248,7 +248,7 @@ export function initAnalysis(api) {
             const html = cont(rootN, color, num, color === 'b', (n, s) => `<span class="am ${n === curN ? 'on' : ''}" data-id="${n.id}">${esc(s)}</span>`);
             mv.innerHTML = html ? html.replace(/\(/g, '<span class="an-var">(</span>').replace(/\)/g, '<span class="an-var">)</span>') : '<span class="mut">No moves yet – play the first solution move on the board.</span>';
         }
-        $('#anId').placeholder = ' ' + api.nextId();
+        $('#anId').placeholder = '' + api.nextId();
         try { $('#anCode').value = codeOf(buildPuzzle()); } catch (e) { $('#anCode').value = ''; $('#anCode').placeholder = e.message; }
     }
 
