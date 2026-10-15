@@ -23,7 +23,8 @@ const BOARDS = [
   { k: 'green', n: 'Green', l: '#eeeed2', d: '#769656' }, { k: 'lavender', n: 'Lavender', l: '#efeff3', d: '#8476ba' }, { k: 'pink', n: 'Pink', l: '#fbe9ee', d: '#e49bb0' },
   { k: 'sand', n: 'Sand', img: 'sand', a: '#b8a590' }
 ];
-const cfg = { board: localStorage.cp4uBoard || 'aquamarine', pieces: localStorage.cp4uPieces || 'neo' };
+const BOTS = [{ k: 'jade', n: 'Jade', img: 'Bots/Jade.png' }, { k: 'oliver', n: 'Oliver', img: 'Bots/Oliver.png' }, { k: 'off', n: 'Voice off' }];
+const cfg = { board: localStorage.cp4uBoard || 'aquamarine', pieces: localStorage.cp4uPieces || 'neo', bot: localStorage.cp4uBot || 'jade' };
 const PIECE = (c, t) => {
   const p = PIECES.find(x => x.k === cfg.pieces) || PIECES[0];
   return p.k === 'lichess' ? LICHESS(c, t) : `${CC}/pieces/${p.dir || p.k}/150/${c}${t}.png`;
@@ -84,6 +85,31 @@ function beep(name) {
 function sound(name) { try { const a = new Audio(SOUNDS[name]); a.play().catch(() => beep(name)); } catch { beep(name); } }
 const moveSound = (m, skipPromo) => sound(m.promotion && !skipPromo ? 'promote' : game.in_check() ? 'check' : m.captured ? 'capture' : 'move');
 
+/* ---------- brilliant sacrifice voice (files in Audio/voice/) ---------- */
+const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
+const PNAME = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
+let voiceTok = 0, voiceAudio = null;
+
+// returns e.g. "brilliant-queen" if the move just played is a real sacrifice, otherwise ''
+function sacVoice(mv) {
+  if (mv.piece === 'k' || mv.promotion) return '';
+  const taken = mv.captured ? VAL[mv.captured] : 0;
+  const attacked = game.moves({ verbose: true }).some(o => o.to === mv.to && o.captured);   // opponent can take the piece I just moved
+  return attacked && VAL[mv.piece] > taken ? 'brilliant-' + PNAME[mv.piece] : '';
+}
+const voiceText = v => 'What a brilliant ' + v.split('-')[1] + (v.startsWith('move-') ? ' move!' : v.startsWith('check-') ? ' check!' : ' sacrifice!');
+// plays the file, then calls done() when it ends (also if the file is missing, so the game never gets stuck)
+function playVoice(file, done) {
+  const tok = voiceTok; let fired = false;
+  const go = () => { if (fired) return; fired = true; if (tok === voiceTok && done) done(); };
+  try {
+    voiceAudio = new Audio('Audio/voice/' + cfg.bot + '/' + file + '.mp3');
+    voiceAudio.onended = go; voiceAudio.onerror = go;
+    voiceAudio.play().catch(go);
+    setTimeout(go, 6000);
+  } catch { go(); }
+}
+
 /* ---------- board (8x8 equal cells, piece fills its cell, a-h / 1-8 labels) ---------- */
 function draw() {
   let h = '';
@@ -127,7 +153,7 @@ function checkTree(nd, g) {
 
 /* ---------- solver ---------- */
 function open(p, scroll = false) {
-  clearTimeout(autoT);
+  clearTimeout(autoT); voiceTok++; if (voiceAudio) voiceAudio.pause();
   cur = p; game = new Chess(p.fen); alt = {};
   tree = p.pgn ? parseTree(p.pgn) : null; node = tree;
   sol = tree ? mainLine(tree) : p.solution;
@@ -161,8 +187,18 @@ function tryMove(from, to, promo = 'q') {
     last = mv; step++; log.push(mv.san); fbSq = mv.to; fbIcon = brilliant ? 'brilliant' : 'best';
     if (tree) node = kid || { san: norm(mv.san), raw: mv.san, kids: [] };
     moveSound(mv, true);                                                  // promote.mp3 already played when the dialog opened
-    if (game.in_checkmate() || (tree ? !node.kids.length : step >= sol.length)) { draw(); finish(); return true; }
-    busy = true; msg('✔ Correct!', 'ok'); draw(); setTimeout(reply, 600);
+    const kind = !brilliant ? '' : game.in_checkmate() ? 'move-' : game.in_check() ? 'check-' : '';
+    const v = cfg.bot === 'off' ? '' : sacVoice(mv) || (kind ? kind + PNAME[mv.piece] : '');
+    console.log('move:', mv.san, '| piece:', mv.piece, '| lichess:', !!cur.lichess, '| mate:', game.in_checkmate(), '| voice:', v || 'none');
+    if (game.in_checkmate() || (tree ? !node.kids.length : step >= sol.length)) {
+      draw();
+      if (v) { busy = true; msg(voiceText(v), 'ok'); setTimeout(() => playVoice(v, finish), 350); }
+      else finish();
+      return true;
+    }
+    busy = true; msg(v ? voiceText(v) : '✔ Correct!', 'ok'); draw();
+    if (v) setTimeout(() => playVoice(v, () => setTimeout(reply, 400)), 350);   // voice first, then the opponent's move
+    else setTimeout(reply, 600);
   } else {
     game.undo(); wrong++; fbSq = to; fbIcon = 'blunder'; sound('wrong'); msg('✖ Not the best move – try again.', 'err'); draw();
     setTimeout(() => { fbSq = null; draw(); }, 700);                      // no shake
@@ -526,12 +562,15 @@ function renderSettings() {
   $('#pieceOpts').innerHTML = PIECES.map(p => `<button type="button" class="opt ${p.k === cfg.pieces ? 'on' : ''}" data-p="${p.k}" title="${p.n}"><img src="${PIECE_PREVIEW(p)}" alt="${p.n}"></button>`).join('');
   $('#pieceOpts').classList.add('pcs');
   $('#curPieces').textContent = (PIECES.find(p => p.k === cfg.pieces) || PIECES[0]).n;
+  $('#botOpts').innerHTML = BOTS.map(b => `<button type="button" class="opt ${b.k === cfg.bot ? 'on' : ''}" data-v="${b.k}" title="${b.n}">${b.img ? `<img src="${b.img}" alt="${b.n}">` : '<b>Off</b>'}</button>`).join('');
+  $('#curBot').textContent = (BOTS.find(b => b.k === cfg.bot) || BOTS[0]).n;
 }
 $('#btnSet').onclick = () => { renderSettings(); $('#setDlg').showModal(); };
 $('#setClose').onclick = () => $('#setDlg').close();
 $('#setDlg').onclick = e => {
   if (e.target === $('#setDlg')) return $('#setDlg').close();
-  const b = e.target.closest('[data-b]'), p = e.target.closest('[data-p]');
+  const b = e.target.closest('[data-b]'), p = e.target.closest('[data-p]'), vb = e.target.closest('[data-v]');
+  if (vb) { cfg.bot = vb.dataset.v; localStorage.cp4uBot = cfg.bot; renderSettings(); }
   if (b) { cfg.board = b.dataset.b; localStorage.cp4uBoard = cfg.board; applyBoard(); renderSettings(); analysis.refresh(); }
   if (p) { cfg.pieces = p.dataset.p; localStorage.cp4uPieces = cfg.pieces; preloadPieces(); renderSettings(); if (game) draw(); analysis.refresh(); }
 };
