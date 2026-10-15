@@ -1442,24 +1442,3 @@ body {
   color: #c95b4a
 }
 
-
-html,
-body,
-img,
-svg,
-.board,
-.bwrap,
-.abwrap,
-.pc,
-.opt,
-.brand img {
-  forced-color-adjust: none;
-}
-
-img,
-svg,
-.board,
-.pc,
-.opt i {
-  filter: none !important;
-}
