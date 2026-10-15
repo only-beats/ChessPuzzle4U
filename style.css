@@ -581,13 +581,13 @@ code {
 .opts {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px
+  gap: 6px
 }
 
 .opt {
-  width: 58px;
-  height: 58px;
-  border-radius: 10px;
+  width: 46px;
+  height: 46px;
+  border-radius: 8px;
   border: 2px solid transparent;
   overflow: hidden;
   cursor: pointer;
@@ -619,7 +619,7 @@ code {
 
 .opts.pcs .opt img {
   object-fit: contain;
-  padding: 4px
+  padding: 3px
 }
 
 /* ===== responsive ===== */
@@ -683,8 +683,8 @@ code {
   }
 
   .opt {
-    width: 50px;
-    height: 50px
+    width: 40px;
+    height: 40px
   }
 
   .stats #stSolved .sl {
@@ -1387,4 +1387,57 @@ body {
   -webkit-user-drag: none;
   filter: drop-shadow(0 0 3px #000) drop-shadow(0 0 3px #000)
     /* same dark glow as the 8 and h */
+}
+
+.sndrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 0
+}
+
+.tog {
+  width: 34px;
+  height: 18px;
+  border-radius: 9px;
+  border: 0;
+  padding: 3px;
+  cursor: pointer;
+  background: #c95b4a;
+  display: flex;
+  align-items: center;
+  transition: background .2s
+}
+
+.tog i {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform .2s
+}
+
+.tog.on {
+  background: #86c3a8
+}
+
+.tog.on i {
+  transform: translateX(16px)
+}
+
+.sndico {
+  display: flex
+}
+
+.sndico svg {
+  width: 14px;
+  height: 14px
+}
+
+.sndico.on {
+  color: #86c3a8
+}
+
+.sndico.off {
+  color: #c95b4a
 }
