@@ -1,6 +1,7 @@
 import { firebaseConfig, SOUNDS, CATS } from './config.js';
 import { SEED } from './puzzles-seed.js';
 import { initAnalysis } from './Analysis.js';
+import { initBattle } from './battle.js';
 
 const $ = s => document.querySelector(s);
 const norm = s => (s || '').replace(/[+#!?]/g, '');
@@ -63,7 +64,7 @@ const PUZ_FILE = './puzzles-lichess.js';
 const PUZ_VER = 2;   // change to 3, 4 ... each time you upload a new puzzles-lichess.js
 const FB = !String(firebaseConfig.apiKey).startsWith('PASTE');
 let puzzles = [...SEED], db = null, auth = null, F = {}, isAdmin = false, catK = 0;
-let cur, game, sol, alt, tree, node, autoT, page = 0, promoMove = null, step = 0, user, flip, last, sel, targets = [], wrong, busy, done, hintLvl, fbSq, fbIcon, log = [];
+let BT = null, cur, game, sol, alt, tree, node, autoT, page = 0, promoMove = null, step = 0, user, flip, last, sel, targets = [], wrong, busy, done, hintLvl, fbSq, fbIcon, log = [];
 let wantId = +location.hash.slice(1) || +localStorage.cp4uLast;
 let prog = JSON.parse(localStorage.cp4u || '{"s":[],"streak":0}');
 const saveProg = () => { localStorage.cp4u = JSON.stringify(prog); stats(); };
@@ -183,6 +184,7 @@ const accepted = () => {
 const kidFor = mv => node.kids.find(k => k.san === norm(mv.san));
 
 function tryMove(from, to, promo = 'q') {
+  if (BT && BT.locked()) return false;
   const mv = game.move({ from, to, promotion: promo });
   if (!mv) return false;
   sel = null; targets = [];
@@ -194,7 +196,7 @@ function tryMove(from, to, promo = 'q') {
     if (tree) node = kid || { san: norm(mv.san), raw: mv.san, kids: [] };
     moveSound(mv, true);                                                  // promote.mp3 already played when the dialog opened
     const kind = !brilliant ? '' : game.in_checkmate() ? 'move-' : game.in_check() ? 'check-' : '';
-    const v = (cfg.bot === 'off' || !cfg.sound) ? '' : (brilliant ? sacVoice(mv) : '') || (kind ? kind + PNAME[mv.piece] : '');
+    const v = (cfg.bot === 'off' || !cfg.sound || BT) ? '' : (brilliant ? sacVoice(mv) : '') || (kind ? kind + PNAME[mv.piece] : '');
     console.log('move:', mv.san, '| piece:', mv.piece, '| lichess:', !!cur.lichess, '| mate:', game.in_checkmate(), '| voice:', v || 'none');
     if (game.in_checkmate() || (tree ? !node.kids.length : step >= sol.length)) {
       draw();
@@ -206,7 +208,7 @@ function tryMove(from, to, promo = 'q') {
     if (v) setTimeout(() => playVoice(v, () => setTimeout(reply, 400)), 350);   // voice first, then the opponent's move
     else setTimeout(reply, 600);
   } else {
-    game.undo(); wrong++; fbSq = to; fbIcon = 'blunder'; sound('wrong'); msg('✖ Not the best move – try again.', 'err'); draw();
+    game.undo(); wrong++; fbSq = to; fbIcon = 'blunder'; sound('wrong'); if (BT) { draw(); BT.wrong(); return true; } msg('✖ Not the best move – try again.', 'err'); draw();
     setTimeout(() => { fbSq = null; draw(); }, 700);                      // no shake
   }
   return true;
@@ -222,7 +224,7 @@ function reply() {
 }
 const nextInList = () => { const l = filtered(), i = l.findIndex(p => p.id === cur.id); return i >= 0 ? l[i + 1] : l[0]; };
 function finish() {
-  done = true; sound('win');
+  done = true; sound('win'); if (BT) return BT.solved();
   const nx = nextInList();
   msg((wrong ? 'Solved!' : 'Perfect – solved without a mistake!') + (nx ? ' Loading next puzzle…' : 'End of this category!'), 'ok');
   if (!prog.s.includes(cur.id)) prog.s.push(cur.id);
@@ -507,7 +509,7 @@ async function initFirebase() {
     err => { console.error(err); if (!cur) msg('⚠ Could not load puzzles from Firebase (' + err.message + ') – showing built-in puzzles.', 'err'); });
   A.onAuthStateChanged(auth, async u => {
     isAdmin = false;
-    if (u) try { isAdmin = (await D.get(D.ref(db, 'admins/' + u.uid))).val() === true; } catch { /* not admin */ }
+    if (u && !u.isAnonymous) try { isAdmin = (await D.get(D.ref(db, 'admins/' + u.uid))).val() === true; } catch { /* not admin */ }
     renderAdmin(); renderList();
   });
 }
@@ -626,5 +628,6 @@ const analysis = initAnalysis({
 game = new Chess(); user = 'w'; flip = false; draw();                      // empty-puzzle start position so the board is never blank
 preloadPieces(); stats(); applyBoard(); renderList();
 { const p = puzzles.find(x => x.id === wantId) || puzzles.find(x => !prog.s.includes(x.id)) || puzzles[0]; if (p) open(p); }
-fitBoard(); loadFilePuzzles(); initFirebase();
+fitBoard(); loadFilePuzzles(); const fbReady = initFirebase();
+initBattle({ $, ready: fbReady, getFB: () => ({ db, F, auth }), getPuzzles: () => puzzles, catOf, open, setBT: b => { BT = b; } });
 document.body.classList.remove('sk-on');                                   // skeleton off: the real page is ready
