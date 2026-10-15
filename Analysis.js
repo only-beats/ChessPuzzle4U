@@ -8,7 +8,6 @@
 const FILES = 'abcdefgh';
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-
 const CSS = `
 #analysis{grid-column:1/-1}
 #analysis h3{margin:0 0 12px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
@@ -117,9 +116,9 @@ export function initAnalysis(api) {
       </div>
       <div class="an-tools">
         <button type="button" data-act="seed">Upload built-in puzzles</button>
-        <label class="filebtn">📂 Import puzzle.js / Lichess .csv<input id="anFile" type="file" accept=".js,.json,.txt,.csv" hidden></label>
-        <button type="button" data-act="dl">⬇ Download database puzzles</button>
-        <label class="filebtn">🧩 Lichess .csv → GitHub file<input id="anCsv" type="file" accept=".csv,.txt" hidden></label>
+        <label class="filebtn">Import puzzle.js / Lichess .csv<input id="anFile" type="file" accept=".js,.json,.txt,.csv" hidden></label>
+        <button type="button" data-act="dl">Download database puzzles</button>
+        <label class="filebtn">Lichess .csv → GitHub file<input id="anCsv" type="file" accept=".csv,.txt" hidden></label>
       </div>
       <button type="button" class="pri" data-act="save">Save to Firebase</button>
       <div id="anMsg" class="msg"></div>
@@ -249,7 +248,7 @@ export function initAnalysis(api) {
             const html = cont(rootN, color, num, color === 'b', (n, s) => `<span class="am ${n === curN ? 'on' : ''}" data-id="${n.id}">${esc(s)}</span>`);
             mv.innerHTML = html ? html.replace(/\(/g, '<span class="an-var">(</span>').replace(/\)/g, '<span class="an-var">)</span>') : '<span class="mut">No moves yet – play the first solution move on the board.</span>';
         }
-        $('#anId').placeholder = 'auto ' + api.nextId();
+        $('#anId').placeholder = ' ' + api.nextId();
         try { $('#anCode').value = codeOf(buildPuzzle()); } catch (e) { $('#anCode').value = ''; $('#anCode').placeholder = e.message; }
     }
 
