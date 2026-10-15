@@ -1441,3 +1441,184 @@ body {
 .sndico.off {
   color: #c95b4a
 }
+
+
+
+
+
+
+/* ===== Puzzle battle ===== */
+.bwrap {
+  position: relative
+}
+
+#btnBattle small {
+  font-size: .85em;
+  font-weight: 400;
+  opacity: .75
+}
+
+/* full-width button under Hint / Solution / Retry / Next */
+
+/* while a battle runs: only the board, timer and scores */
+body.bt .side,
+body.bt #admin,
+body.bt #analysis,
+body.bt #pager,
+body.bt #solver .btns,
+body.bt #moves,
+body.bt .pinfo,
+body.bt .pstats {
+  display: none !important
+}
+
+body.bt main {
+  grid-template-columns: minmax(0, 640px);
+  justify-content: center
+}
+
+/* scoreboard above the board */
+.bt-hud {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1px solid var(--line)
+}
+
+.bt-hud.hidden {
+  display: none
+}
+
+.bt-pl {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px
+}
+
+.bt-pl.r {
+  align-items: flex-end;
+  text-align: right
+}
+
+.bt-pl .nm {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px
+}
+
+.bt-pl .sc {
+  color: var(--m);
+  white-space: nowrap
+}
+
+.bt-time {
+  min-width: 72px;
+  padding: 4px 12px;
+  border-radius: 10px;
+  background: var(--card);
+  font-size: 22px;
+  font-weight: 800;
+  text-align: center;
+  font-variant-numeric: tabular-nums
+}
+
+#btLeave {
+  grid-column: 1 / -1;
+  justify-self: end;
+  min-height: 0;
+  padding: 4px 12px;
+  font-size: 12px
+}
+
+.hrt {
+  color: #e0594a
+}
+
+.hrt .x {
+  color: #55504a
+}
+
+/* countdown / game over / result on top of the board */
+.bt-ov {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px;
+  text-align: center;
+  background: rgba(0, 0, 0, .72);
+  border-radius: 12px
+}
+
+.bt-ov.hidden {
+  display: none
+}
+
+.bt-big {
+  font-size: 34px;
+  font-weight: 800
+}
+
+/* create / lobby dialog */
+#btDlg {
+  width: min(460px, 94vw)
+}
+
+#btDlg input:not([type=range]) {
+  width: 100%;
+  margin-bottom: 4px
+}
+
+.bt-elo {
+  display: block;
+  margin: 0 0 8px
+}
+
+.bt-chip {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background: var(--bg);
+  color: var(--t);
+  cursor: pointer
+}
+
+.bt-chip.on {
+  border-color: var(--g)
+}
+
+.bt-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0
+}
+
+.bt-row span {
+  margin-left: auto;
+  color: var(--m)
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #888
+}
+
+.dot.on {
+  background: #6fcf97
+}
