@@ -17,8 +17,9 @@ const CSS = `
 .an-left,.an-right{display:flex;flex-direction:column;gap:10px;min-width:0}
 .an-tabs{display:flex;gap:6px}.an-tabs button{flex:1}.an-tabs button.on{background:linear-gradient(180deg,var(--g1),var(--g2));color:#10150a}
 .an-pal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
-.an-pal button{padding:3px;aspect-ratio:1;display:flex;align-items:center;justify-content:center;border:2px solid transparent;background:var(--bg);font-size:12px}
-.an-pal button.on{border-color:var(--g);background:var(--hl)}
+.an-pal button{padding:3px;aspect-ratio:1;display:flex;align-items:center;justify-content:center;border:2px solid transparent;background:linear-gradient(135deg,#d8d0bf,#a99f8b);font-size:12px;color:#161512}
+.an-pal button.on{border-color:var(--g);background:linear-gradient(135deg,#e6dfcf,#b9af9a);box-shadow:0 0 0 2px var(--g)}
+.an-pal img{filter:drop-shadow(0 0 1px rgba(0,0,0,.5))}
 .an-pal img{width:100%;height:100%;object-fit:contain;pointer-events:none}
 .abwrap{position:relative;width:100%;aspect-ratio:1/1}
 .an-nav{display:flex;gap:6px}.an-nav button{flex:1;padding:9px 4px}
