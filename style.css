@@ -1441,3 +1441,28 @@ body {
 .sndico.off {
   color: #c95b4a
 }
+
+html {
+  background-color: #161512
+}
+
+html,
+body,
+img,
+svg,
+.board,
+.bwrap,
+.abwrap,
+.pc,
+.opt,
+.brand img {
+  forced-color-adjust: none;
+}
+
+img,
+svg,
+.board,
+.pc,
+.opt i {
+  filter: none !important;
+}
