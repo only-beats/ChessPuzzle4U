@@ -24,7 +24,7 @@ const BOARDS = [
   { k: 'sand', n: 'Sand', img: 'sand', a: '#b8a590' }
 ];
 const BOTS = [{ k: 'jade', n: 'Jade', img: 'Bots/Jade.png' }, { k: 'oliver', n: 'Oliver', img: 'Bots/Oliver.png' }, { k: 'off', n: 'Voice off' }];
-const cfg = { board: localStorage.cp4uBoard || 'aquamarine', pieces: localStorage.cp4uPieces || 'neo', bot: localStorage.cp4uBot || 'jade' };
+const cfg = { board: localStorage.cp4uBoard || 'aquamarine', pieces: localStorage.cp4uPieces || 'neo', bot: localStorage.cp4uBot || 'jade', sound: localStorage.cp4uSound !== '0' };
 const PIECE = (c, t) => {
   const p = PIECES.find(x => x.k === cfg.pieces) || PIECES[0];
   return p.k === 'lichess' ? LICHESS(c, t) : `${CC}/pieces/${p.dir || p.k}/150/${c}${t}.png`;
@@ -82,7 +82,7 @@ function beep(name) {
     const t = ac.currentTime + i * .1; g.gain.setValueAtTime(.12, t); g.gain.exponentialRampToValueAtTime(.001, t + .15); o.start(t); o.stop(t + .16);
   });
 }
-function sound(name) { try { const a = new Audio(SOUNDS[name]); a.play().catch(() => beep(name)); } catch { beep(name); } }
+function sound(name) { if (!cfg.sound) return; try { const a = new Audio(SOUNDS[name]); a.play().catch(() => beep(name)); } catch { beep(name); } }
 const moveSound = (m, skipPromo) => sound(m.promotion && !skipPromo ? 'promote' : game.in_check() ? 'check' : m.captured ? 'capture' : 'move');
 
 /* ---------- brilliant sacrifice voice (files in Audio/voice/) ---------- */
@@ -92,12 +92,18 @@ let voiceTok = 0, voiceAudio = null;
 
 // returns e.g. "brilliant-queen" if the move just played is a real sacrifice, otherwise ''
 function sacVoice(mv) {
-  if (mv.piece === 'k' || mv.promotion) return '';
+  if (mv.piece === 'k') return '';
+  if (mv.promotion) return 'brilliant-promotion-' + PNAME[mv.promotion];   // dxe1=N → knight promotion
   const taken = mv.captured ? VAL[mv.captured] : 0;
-  const attacked = game.moves({ verbose: true }).some(o => o.to === mv.to && o.captured);   // opponent can take the piece I just moved
-  return attacked && VAL[mv.piece] > taken ? 'brilliant-' + PNAME[mv.piece] : '';
+  const attacked = game.moves({ verbose: true }).some(o => o.to === mv.to && o.captured);
+  // a bigger piece captures a smaller one (Bxg2) = sacrifice, even if it can't be recaptured
+  return (attacked || mv.captured) && VAL[mv.piece] > taken ? 'brilliant-' + PNAME[mv.piece] : '';
 }
-const voiceText = v => 'What a brilliant ' + v.split('-')[1] + (v.startsWith('move-') ? ' move!' : v.startsWith('check-') ? ' check!' : ' sacrifice!');
+const voiceText = v => {
+  const p = v.split('-');
+  if (p[1] === 'promotion') return 'What a brilliant ' + p[2] + ' promotion!';
+  return 'What a brilliant ' + p[1] + (v.startsWith('move-') ? ' move!' : v.startsWith('check-') ? ' check!' : ' sacrifice!');
+};
 // plays the file, then calls done() when it ends (also if the file is missing, so the game never gets stuck)
 function playVoice(file, done) {
   const tok = voiceTok; let fired = false;
@@ -188,7 +194,7 @@ function tryMove(from, to, promo = 'q') {
     if (tree) node = kid || { san: norm(mv.san), raw: mv.san, kids: [] };
     moveSound(mv, true);                                                  // promote.mp3 already played when the dialog opened
     const kind = !brilliant ? '' : game.in_checkmate() ? 'move-' : game.in_check() ? 'check-' : '';
-    const v = cfg.bot === 'off' ? '' : sacVoice(mv) || (kind ? kind + PNAME[mv.piece] : '');
+    const v = (cfg.bot === 'off' || !cfg.sound) ? '' : (brilliant ? sacVoice(mv) : '') || (kind ? kind + PNAME[mv.piece] : '');
     console.log('move:', mv.san, '| piece:', mv.piece, '| lichess:', !!cur.lichess, '| mate:', game.in_checkmate(), '| voice:', v || 'none');
     if (game.in_checkmate() || (tree ? !node.kids.length : step >= sol.length)) {
       draw();
@@ -564,11 +570,18 @@ function renderSettings() {
   $('#curPieces').textContent = (PIECES.find(p => p.k === cfg.pieces) || PIECES[0]).n;
   $('#botOpts').innerHTML = BOTS.map(b => `<button type="button" class="opt ${b.k === cfg.bot ? 'on' : ''}" data-v="${b.k}" title="${b.n}">${b.img ? `<img src="${b.img}" alt="${b.n}">` : '<b>Off</b>'}</button>`).join('');
   $('#curBot').textContent = (BOTS.find(b => b.k === cfg.bot) || BOTS[0]).n;
+
+  $('#sndTog').classList.toggle('on', cfg.sound);
+  $('#sndTog').setAttribute('aria-pressed', cfg.sound);
+  $('#sndIco').className = 'sndico ' + (cfg.sound ? 'on' : 'off');
+  $('#sndIco').innerHTML = cfg.sound
+    ? '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M3 9v6h4l5 4V5L7 9H3z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
+    : '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M3 9v6h4l5 4V5L7 9H3z"/><path d="M16 9l5 6M21 9l-5 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 }
 $('#btnSet').onclick = () => { renderSettings(); $('#setDlg').showModal(); };
 $('#setClose').onclick = () => $('#setDlg').close();
 $('#setDlg').onclick = e => {
-  if (e.target === $('#setDlg')) return $('#setDlg').close();
+  if (e.target.closest('#sndTog')) { cfg.sound = !cfg.sound; localStorage.cp4uSound = cfg.sound ? '1' : '0'; if (!cfg.sound && voiceAudio) voiceAudio.pause(); renderSettings(); return; }
   const b = e.target.closest('[data-b]'), p = e.target.closest('[data-p]'), vb = e.target.closest('[data-v]');
   if (vb) { cfg.bot = vb.dataset.v; localStorage.cp4uBot = cfg.bot; renderSettings(); }
   if (b) { cfg.board = b.dataset.b; localStorage.cp4uBoard = cfg.board; applyBoard(); renderSettings(); analysis.refresh(); }
