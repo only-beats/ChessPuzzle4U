@@ -29,7 +29,7 @@ export function initBattle(api) {
         '<div id="btHud" class="bt-hud hidden"><div id="btMe" class="bt-pl"></div><div id="btTime" class="bt-time">0:00</div>' +
         '<div id="btOp" class="bt-pl"></div><button id="btLeave" class="ghost" type="button">Leave</button></div>');
     $('.bwrap').insertAdjacentHTML('beforeend', '<div id="btOv" class="bt-ov hidden"></div>');
-    $('#solver .btns').insertAdjacentHTML('beforeend', '<button id="btnBattle" type="button">Play Online Puzzle Battle</button>');
+    $('#solver .btns').insertAdjacentHTML('beforeend', '<button id="btnBattle" class="ib" type="button"><img src="svg/battle.svg" alt=""><span>Play Online Puzzle Battle</span></button>');
 
     const dlg = $('#btDlg');
     const ov = h => { const o = $('#btOv'); o.innerHTML = h; o.classList.toggle('hidden', !h); };
