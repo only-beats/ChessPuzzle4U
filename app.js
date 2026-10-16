@@ -135,7 +135,10 @@ function draw() {
   $('#board').innerHTML = h;
   $('#moves').innerHTML = log.map((s, i) => (i % 2 === 0 ? `<b>${Math.floor(i / 2) + 1}.</b> ` : '') + s).join(' ');
 }
-const msg = (t, c = '') => { const m = $('#msg'); m.textContent = t; m.className = 'msg ' + c; };
+const msg = (t, c = '') => {
+  if (BT && cur) { t = cur.description || 'Find the best moves.'; c = ''; }          // battle: always keep the puzzle description visible (e.g. "Black to move and mate in 3.")
+  const m = $('#msg'); m.textContent = t; m.className = 'msg ' + c;
+};
 function preloadPieces() { for (const c of 'wb') for (const t of 'pnbrqk') new Image().src = PIECE(c, t); }
 
 /* ---------- move tree: PGN with variations  "1. Rxe8+ Qxe8 2. Bxd6+ (2. Qe6 ...) 2... Qe7" ---------- */
