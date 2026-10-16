@@ -1,7 +1,7 @@
-import { firebaseConfig, SOUNDS, CATS } from './config.js?v=2';
-import { SEED } from './puzzles-seed.js?v=2';
-import { initAnalysis } from './Analysis.js?v=2';
-import { initBattle } from './battle.js?v=2';
+import { firebaseConfig, SOUNDS, CATS } from './config.js?v=3';
+import { SEED } from './puzzles-seed.js?v=3';
+import { initAnalysis } from './Analysis.js?v=3';
+import { initBattle } from './battle.js?v=3';
 
 const $ = s => document.querySelector(s);
 const norm = s => (s || '').replace(/[+#!?]/g, '');
@@ -576,17 +576,78 @@ function downloadAll() {
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   return { n: l.length, name };
 }
+/* ---------- Lichess database (.csv or .csv.zst, any size)  ➜  puzzles file for GitHub ----------
+   The file is streamed piece by piece (and unpacked on the fly for .zst), so a 1 GB+ database never has to fit in memory. */
+const ZSTD_URL = 'https://cdn.jsdelivr.net/npm/fzstd@0.1.1/+esm';           // small .zst unpacker, loaded only when you pick a .zst file
+let loadZstd = () => import(ZSTD_URL);
+async function readLichessRows(f, onRow, onProgress) {
+  const zst = /\.zst$/i.test(f.name), td = new TextDecoder(); let tail = '', rows = 0, read = 0, tick = 0;
+  const feed = bytes => {
+    const parts = (tail + td.decode(bytes, { stream: true })).split('\n'); tail = parts.pop();
+    for (const l of parts) { rows++; onRow(l.endsWith('\r') ? l.slice(0, -1) : l); }
+  };
+  let zd = null;
+  if (zst) { const { Decompress } = await loadZstd(); zd = new Decompress(chunk => feed(chunk)); }
+  const reader = f.stream().getReader(); let prev = null;
+  for (; ;) {
+    const { done, value } = await reader.read();
+    if (value) read += value.length;
+    if (prev) { if (zd) zd.push(prev, done); else feed(prev); }                // one chunk is held back so the LAST one can be marked final
+    if (done) break;
+    prev = value;
+    if (read - tick > 8e6) { tick = read; onProgress(read, rows); await new Promise(r => setTimeout(r)); }
+  }
+  tail += td.decode(); if (tail.trim()) { rows++; onRow(tail.replace(/\r$/, '')); }
+  return rows;
+}
 async function makeLichessFile(f, onProgress) {
   const tell = t => { amsg(t); if (onProgress) onProgress(t); };
   try {
+    const ans = prompt('How many puzzles should the file have?\n(500000 = 5 lakh. Only Mate in 1-5, most popular first. A bigger file loads slower on phones.)', '500000');
+    if (ans === null) { tell('Cancelled.'); return { n: 0 }; }
+    const T = Math.floor(+String(ans).replace(/[,_\s]/g, '')); if (!(T > 0)) throw Error('Please type a number, for example 500000.');
+
+    // 1) read the database: keep the mate puzzles of every category (most popular first)
+    let keep = { 1: [], 2: [], 3: [], 4: [], 5: [] }; const seen = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     tell('Reading ' + f.name + '…');
-    const text = await f.text();
-    const list = await fromLichessAsync(text, (i, n, ok) => tell(`Converting… ${i.toLocaleString()} / ${n.toLocaleString()} rows (${ok.toLocaleString()} puzzles) – keep this tab open`));
-    const rows = list.map(p => '  ' + JSON.stringify({ id: p.id, fen: p.fen, solution: p.solution, lichess: p.lichess, rating: p.rating, category: p.category }));
-    const blob = new Blob(['export const SEED = [\n', rows.join(',\n'), '\n];\n'], { type: 'text/javascript' });
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'puzzles-lichess.js';
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-    tell(`⬇ Done: ${list.length.toLocaleString()} puzzles, ${(blob.size / 1048576).toFixed(1)} MB → puzzles-lichess.js. Put it in your GitHub repo next to index.html.`);
+    const rows = await readLichessRows(f, line => {
+      const c = line.split(','); if (c.length < 8) return;
+      const m = c[7].match(/mateIn([1-5])/); if (!m) return;
+      const a = keep[m[1]]; seen[m[1]]++; a.push({ pop: +c[5] || 0, line });
+      if (a.length > T * 2) { a.sort((x, y) => y.pop - x.pop); a.length = T; }
+    }, (read, n) => tell(`Reading ${f.name}… ${(read / 1048576).toFixed(0)} / ${(f.size / 1048576).toFixed(0)} MB (${n.toLocaleString()} rows) – keep this tab open`));
+
+    // 2) pick T puzzles, shared evenly between Mate in 1..5 (a category that has fewer gives its share to the others)
+    for (const k in keep) keep[k].sort((x, y) => y.pop - x.pop);
+    const take = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }; let left = Math.min(T, Object.values(keep).reduce((s, a) => s + a.length, 0));
+    while (left > 0) {
+      const open = Object.keys(keep).filter(k => take[k] < keep[k].length); if (!open.length) break;
+      const share = Math.max(1, Math.floor(left / open.length));
+      for (const k of open) { const n = Math.min(share, keep[k].length - take[k], left); take[k] += n; left -= n; if (left <= 0) break; }
+    }
+    const lines = []; for (const k in keep) lines.push(...keep[k].slice(0, take[k]).map(x => x.line));
+    keep = null;
+    if (!lines.length) throw Error('No mate puzzles found in that file – is it lichess_db_puzzle.csv(.zst)? (' + rows.toLocaleString() + ' rows read)');
+    lines.sort((a, b) => { const x = a.slice(0, a.indexOf(',')), y = b.slice(0, b.indexOf(',')); return x < y ? -1 : x > y ? 1 : 0; });
+
+    // 3) convert (ids of puzzles you already have are kept, new ones continue after the highest id)
+    const have = lichessIds(), list = []; let id = nextId();
+    for (let i = 0; i < lines.length; i++) {
+      const p = lichessRow(lines[i], have, () => id++); if (p) list.push(p);
+      if (i % 500 === 499) { tell(`Converting… ${(i + 1).toLocaleString()} / ${lines.length.toLocaleString()} puzzles – keep this tab open`); await new Promise(r => setTimeout(r)); }
+    }
+    if (!list.length) throw Error('No puzzles could be converted.');
+    list.sort((x, y) => x.id - y.id);
+
+    // 4) download  "<how many>-puzzles.js"
+    const parts = ['export const SEED = [\n'];
+    for (let i = 0; i < list.length; i += 5000)
+      parts.push(list.slice(i, i + 5000).map(p => '  ' + JSON.stringify({ id: p.id, fen: p.fen, solution: p.solution, lichess: p.lichess, rating: p.rating, category: p.category })).join(',\n') + (i + 5000 < list.length ? ',\n' : '\n'));
+    parts.push('];\n');
+    const blob = new Blob(parts, { type: 'text/javascript' }), name = list.length + '-puzzles.js', mb = blob.size / 1048576;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    tell(`⬇ Done: ${name} – ${list.length.toLocaleString()} puzzles, ${mb.toFixed(1)} MB. Rename it to puzzles-lichess.js, put it in your GitHub repo and raise PUZ_VER in app.js by 1.` + (mb > 95 ? ' ⚠ GitHub refuses files over 100 MB – use fewer puzzles.' : mb > 50 ? ' ⚠ Over 50 MB: GitHub warns and the site loads slower.' : ''));
     return { n: list.length };
   } catch (err) { tell('✖ ' + err.message); return { n: 0 }; }
 }
