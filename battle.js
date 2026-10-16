@@ -8,20 +8,26 @@ export function initBattle(api) {
     const { $, ready, getFB, getPuzzles, catOf, open } = api;
     const LS = 'cp4uRoom', NICK = 'cp4uNick', LIVES = 3;
     const CATN = ['All', 'Mate in 1', 'Mate in 2', 'Mate in 3', 'Mate in 4', 'Mate in 5'];
+    const AVATARS = ['Aneka', 'Felix', 'Sophie', 'Milo', 'Luna', 'Milo Pixel', 'Luna Pixel', 'Felix Pixel', 'Aneka Pixel', 'Voxel'];   // files in Avatar/<name>.svg 
+    const avSrc = a => 'Avatar/' + encodeURIComponent(AVATARS.includes(a) ? a : AVATARS[0]) + '.svg';
+    const avImg = (a, c = 'ava') => `<img class="${c}" src="${avSrc(a)}" alt="" draggable="false">`;
     const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const fmt = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 
     let db, F, auth, uid, offset = 0, room = '', joinId = HASH_ROOM, data = null, unsub = null, tick = null, disc = null;
-    let my = null, started = false, over = false, lock = true, err = '';
-    const sel = { time: 180, cat: 0, lo: null, hi: null };   // lo/hi null = whole rating range
+    let my = null, started = false, over = false, lock = true, err = '', round = 0;
+    const sel = { time: 180, cat: 0, lo: null, hi: null, av: AVATARS.includes(localStorage.cp4uAv) ? localStorage.cp4uAv : AVATARS[0] };   // lo/hi null = whole rating range
     const now = () => Date.now() + offset;
+    let tenDone = false, oppAgain = false, tenAudio = null;
+    const sfx = f => { if (localStorage.cp4uSound === '0') return null; try { const a = new Audio('Audio/' + f + '.mp3'); a.play().catch(() => { }); return a; } catch { return null; } };
+    const stopTen = () => { if (tenAudio) { tenAudio.pause(); tenAudio = null; } };
     const R = p => F.ref(db, 'battles/' + room + (p ? '/' + p : ''));
 
     /* ---------- UI shell (built here, so index.html needs no change) ---------- */
     document.body.insertAdjacentHTML('beforeend', '<dialog id="btDlg"></dialog>');
     $('#solver').insertAdjacentHTML('afterbegin',
         '<div id="btHud" class="bt-hud hidden"><div id="btMe" class="bt-pl"></div><div id="btTime" class="bt-time">0:00</div>' +
-        '<div id="btOp" class="bt-pl r"></div><button id="btLeave" class="ghost" type="button">Leave</button></div>');
+        '<div id="btOp" class="bt-pl"></div><button id="btLeave" class="ghost" type="button">Leave</button></div>');
     $('.bwrap').insertAdjacentHTML('beforeend', '<div id="btOv" class="bt-ov hidden"></div>');
     $('#solver .btns').insertAdjacentHTML('beforeend', '<button id="btnBattle" type="button">Play Online Puzzle Battle</button>');
 
@@ -52,25 +58,27 @@ export function initBattle(api) {
 
     /* ---------- dialog ---------- */
     function ratings() { const r = getPuzzles().map(p => p.rating).filter(x => typeof x === 'number'); return r.length ? [Math.min(...r), Math.max(...r)] : [400, 3000]; }
+    const avPick = () => '<div class="setlbl">Avatar</div><div class="bt-avs">' +
+        AVATARS.map(a => `<button type="button" class="bt-av ${sel.av === a ? 'on' : ''}" data-av="${a}" title="${a}">${avImg(a)}</button>`).join('') + '</div>';
     function view() {
         let h = '<h3>Puzzle Battle <button class="ghost" data-a="close" type="button">✕</button></h3>';
         if (err) h += `<div class="msg err">${esc(err)}</div>`;
         if (room && data) {                                                       // ----- lobby
             const link = location.origin + location.pathname + '#battle=' + room;
             const ps = Object.values(data.players || {});
-            h += `<div class="setlbl">Send this link to your opponent</div><div class="srow"><input id="btLink" readonly value="${esc(link)}"><button class="pri" data-a="copy" type="button">Copy</button></div>`;
+            h += `<div class="setlbl">Send this link to your opponent</div><div class="srow"><input id="btLink" readonly value="${esc(link)}"></div><div class="btns"><button data-a="copy" type="button">Copy link</button><button class="pri" data-a="send" type="button">Send link</button></div>`;
             h += `<div class="setlbl">${data.time / 60} min · ${CATN[data.cat]} · rating ${data.lo}–${data.hi}</div><div class="bt-list">` +
-                ps.map(p => `<div class="bt-row"><i class="dot ${p.online ? 'on' : ''}"></i><b>${esc(p.name)}</b><span>${p.ready ? '✔ ready' : ' not ready'}</span></div>`).join('') + '</div>';
+                ps.map(p => `<div class="bt-row">${avImg(p.avatar)}<i class="dot ${p.online ? 'on' : ''}"></i><b>${esc(p.name)}</b><span>${p.ready ? '✔ ready' : ' not ready'}</span></div>`).join('') + '</div>';
             h += ps.length < 2 ? '<div class="mut">Waiting for the second player…</div>' : '';
             h += `<div class="btns"><button class="pri" data-a="ready" type="button" ${ps.length < 2 || (data.players[uid] || {}).ready ? 'disabled' : ''}>I'm ready</button><button class="danger" data-a="leave" type="button">Leave room</button></div>`;
         } else if (joinId) {                                                      // ----- invited by link
-            h += `<div class="setlbl">You were invited to a puzzle battle</div><input id="btNick" maxlength="16" placeholder="Your nickname" value="${esc(localStorage[NICK] || '')}">` +
-                '<div class="btns"><button class="pri" data-a="join" type="button">Join battle</button></div>';
+            h += `<div class="setlbl">You were invited to a Puzzle Battle</div><input id="btNick" maxlength="16" placeholder="Your nickname" value="${esc(localStorage[NICK] || '')}">` +
+                avPick() + '<div class="btns"><button class="pri" data-a="join" type="button">Join battle</button></div>';
         } else {                                                                  // ----- create
             const [a, b] = ratings(), lo = sel.lo == null ? a : Math.max(a, Math.min(sel.lo, b)), hi = sel.hi == null ? b : Math.min(b, Math.max(sel.hi, a));
             const chips = (arr, key) => '<div class="opts">' + arr.map(v => `<button type="button" class="bt-chip ${sel[key] === v[0] ? 'on' : ''}" data-k="${key}" data-v="${v[0]}">${v[1]}</button>`).join('') + '</div>';
             h += `<input id="btNick" maxlength="16" placeholder="Your nickname" value="${esc(localStorage[NICK] || '')}">` +
-                '<div class="setlbl">Time</div>' + chips([[60, '1 min'], [180, '3 min'], [300, '5 min']], 'time') +
+                avPick() + '<div class="setlbl">Time</div>' + chips([[60, '1 min'], [180, '3 min'], [300, '5 min']], 'time') +
                 '<div class="setlbl">Puzzles</div>' + chips(CATN.map((n, i) => [i, n]), 'cat') +
                 '<div class="setlbl">Rating : <b id="btRate"></b></div>' +
                 `<div class="elo bt-elo"><div class="rs"><div class="rs-track"><div class="rs-fill" id="btFill"></div></div>` +
@@ -83,12 +91,15 @@ export function initBattle(api) {
     const closeDlg = () => { if (dlg.open) dlg.close(); };
 
     dlg.addEventListener('click', async e => {
+        const av = e.target.closest('.bt-av');
+        if (av) { sel.av = av.dataset.av; localStorage.cp4uAv = sel.av; av.parentElement.querySelectorAll('.bt-av').forEach(b => b.classList.toggle('on', b === av)); return; }
         const chip = e.target.closest('.bt-chip');
         if (chip) { sel[chip.dataset.k] = +chip.dataset.v; chip.parentElement.querySelectorAll('.bt-chip').forEach(c => c.classList.toggle('on', c === chip)); return; }
         const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
         err = '';
         if (a === 'close') return closeDlg();
-        if (a === 'copy') return share();
+        if (a === 'copy') return copyLink();
+        if (a === 'send') return sendLink();
         if (a === 'create') return create();
         if (a === 'join') return join(joinId);
         if (a === 'ready') return F.set(R('players/' + uid + '/ready'), true);
@@ -108,21 +119,26 @@ export function initBattle(api) {
         const [mn, mx] = ratings();
         sel.lo = +A.value <= mn ? null : +A.value; sel.hi = +B.value >= mx ? null : +B.value; paint();
     });
-    async function share() {
+    async function copyLink() {
         const link = $('#btLink').value;
-        if (navigator.share) { try { await navigator.share({ text: 'Puzzle battle on ChessPuzzle4U – join me!\n' + link }); return; } catch (e) { if (e.name === 'AbortError') return; } }
         try { await navigator.clipboard.writeText(link); } catch { $('#btLink').select(); document.execCommand('copy'); }
-        const b = dlg.querySelector('[data-a=copy]'); b.textContent = 'Copied!'; setTimeout(() => { b.textContent = 'Copy'; }, 1500);
+        const b = dlg.querySelector('[data-a=copy]'); b.textContent = 'Copied!'; setTimeout(() => { b.textContent = 'Copy link'; }, 1500);
+    }
+    async function sendLink() {                                                    // opens the phone's share sheet (WhatsApp, Instagram, Drive...)
+        const link = $('#btLink').value;
+        const share = { title: 'Puzzle Battle', text: 'ChessPuzzle4U | Join my Puzzle Battle!', url: link };
+        if (navigator.share) { try { await navigator.share(share); return; } catch (e) { if (e.name === 'AbortError') return; console.warn('share failed:', e); } }
+        copyLink();                                                                // browsers with no share popup -> copy the link
     }
 
     /* ---------- create / join / leave ---------- */
     const nick = () => { const n = ($('#btNick').value || '').trim().slice(0, 16); if (n) localStorage[NICK] = n; return n; };
-    function pickPuzzles(lo, hi) {
-        const all = getPuzzles().filter(p => p.lichess && (!sel.cat || catOf(p) === sel.cat) && (p.rating || 0) >= lo && (p.rating || 0) <= hi);
+    function pickPuzzles(lo, hi, cat = sel.cat) {
+        const all = getPuzzles().filter(p => p.lichess && (!cat || catOf(p) === cat) && (p.rating || 0) >= lo && (p.rating || 0) <= hi);
         for (let i = all.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[all[i], all[j]] = [all[j], all[i]]; }
         return all.slice(0, 120).map(p => p.id);
     }
-    const newPlayer = name => ({ name, ready: false, idx: 0, solved: 0, lives: LIVES, out: false, online: true });
+    const newPlayer = name => ({ name, avatar: sel.av, ready: false, idx: 0, solved: 0, lives: LIVES, out: false, online: true });
     async function create() {
         const name = nick(); if (!name) { err = 'Enter a nickname first.'; return view(); }
         if (!await connect()) return view();
@@ -167,8 +183,8 @@ export function initBattle(api) {
     }
     function reset(note) {
         if (unsub) unsub(); unsub = null; clearInterval(tick); tick = null;
-        room = ''; data = null; my = null; started = over = false; lock = true; localStorage.removeItem(LS);
-        document.body.classList.remove('bt'); api.setBT(null); $('#btHud').classList.add('hidden'); ov(''); window.dispatchEvent(new Event('resize'));
+        stopTen(); oppAgain = false; room = ''; data = null; my = null; started = over = false; lock = true; localStorage.removeItem(LS);
+        document.body.classList.remove('bt'); api.setBT(null); $('#btHud').classList.add('hidden'); $('#btTime').classList.remove('low'); ov(''); window.dispatchEvent(new Event('resize'));
         if (note) { err = note; view(); } else closeDlg();
     }
 
@@ -181,31 +197,54 @@ export function initBattle(api) {
                 F.runTransaction(R(), d => { if (d && d.status === 'lobby') { d.status = 'playing'; d.startAt = now() + 3000; d.endAt = d.startAt + d.time * 1000; } return d; });
             return;
         }
+        if (data.status === 'over') {                                               // both pressed "Play again" -> new round
+            const ps = Object.values(data.players || {});
+            if (ps.length === 2 && ps.every(p => p.again)) rematch();
+            const oa = others()[0], ask = !!(oa && oa.again);                       // opponent pressed "Play again" -> notify sound
+            if (ask && !oppAgain && !(data.players[uid] || {}).again) sfx('notify');
+            oppAgain = ask;
+        } else if (tick && (data.round || 0) !== round) {                           // a new round has started
+            clearInterval(tick); tick = null; started = over = false; lock = true; oppAgain = false; ov('');
+        }
         if (!tick) play();
         hud(); if (over) result(); else if (my && my.out) outScreen();
     }
     function hud() {
         const m = my || data.players[uid] || {}, o = others()[0];
-        $('#btMe').innerHTML = `<b class="nm">${esc(m.name)}</b><span class="sc">✔ ${m.solved || 0} &nbsp;<span class="hrt">${hearts(m.lives)}</span></span>`;
-        $('#btOp').innerHTML = o ? `<b class="nm">${esc(o.name)}${o.online ? '' : ' <i class="mut">(offline)</i>'}</b><span class="sc">✔ ${o.solved || 0} &nbsp;<span class="hrt">${hearts(o.lives)}</span></span>` : '<i class="mut">opponent left</i>';
+        const card = (p, on) => `${avImg(p.avatar, 'ava lg')}<div class="who"><span class="st"><i class="dot ${on ? 'on' : 'off'}"></i><b class="nm">${esc(p.name)}</b></span>` +
+            `<span class="sc">Life : <span class="hrt">${hearts(p.lives)}</span></span><span class="sc">Solved : ${p.solved || 0}</span></div>`;
+        $('#btMe').innerHTML = card(m, true);
+        $('#btOp').innerHTML = o ? card(o, o.online) : '<i class="mut">opponent left</i>';
     }
     function play() {
         closeDlg(); document.body.classList.add('bt'); api.setBT(BT); $('#btHud').classList.remove('hidden'); window.dispatchEvent(new Event('resize'));
-        my = { ...data.players[uid] };
+        my = { ...data.players[uid] }; round = data.round || 0; tenDone = false; stopTen();
         tick = setInterval(loop, 250); loop();
     }
     function loop() {
         const t = now();
         if (t < data.startAt) { ov(`<div class="bt-big">${Math.ceil((data.startAt - t) / 1000)}</div><div>Get ready…</div>`); lock = true; return; }
-        if (!started) { started = true; ov(''); my.out ? outScreen() : next(); }
-        const left = data.endAt - t; $('#btTime').textContent = fmt(left);
+        if (!started) { started = true; ov(''); if (t - data.startAt < 2000) sfx('game-start'); my.out ? outScreen() : next(); }
+        const left = data.endAt - t; $('#btTime').textContent = fmt(left); $('#btTime').classList.toggle('low', left <= 10000);
+        if (left <= 10000 && left > 0 && !tenDone) { tenDone = true; tenAudio = sfx('tenseconds'); }
         const everyoneOut = Object.entries(data.players).every(([k, p]) => k === uid ? my.out : p.out);
         if (left <= 0 || data.status === 'over' || everyoneOut || !others().length) end();
     }
     function end() {
-        if (over) return; over = true; lock = true; clearInterval(tick);
+        if (over) return; over = true; lock = true; clearInterval(tick); stopTen(); sfx('battle-end');
         if (data.status !== 'over') F.update(R(), { status: 'over' });
         result();
+    }
+    function rematch() {                                                           // reset scores, new puzzles, 3-second countdown
+        const q = pickPuzzles(data.lo, data.hi, data.cat).join(',');
+        F.runTransaction(R(), d => {
+            if (d && d.status === 'over' && d.players && Object.keys(d.players).length === 2 && Object.values(d.players).every(p => p.again)) {
+                d.round = (d.round || 0) + 1; if (q) d.queue = q; d.status = 'playing';
+                d.startAt = now() + 3000; d.endAt = d.startAt + d.time * 1000;
+                for (const k in d.players) Object.assign(d.players[k], { ready: true, again: false, idx: 0, solved: 0, lives: LIVES, out: false });
+            }
+            return d;
+        });
     }
     function push(o) { Object.assign(my, o); F.update(R('players/' + uid), o); hud(); }
 
@@ -229,12 +268,17 @@ export function initBattle(api) {
     function outScreen() { if (!over) ov('<div class="bt-big">Game over</div><div>You used all 3 lives. Your opponent is still playing…</div>'); }
     function result() {
         const m = data.players[uid], o = others()[0];
-        let t;
-        if (!o) t = 'Opponent left – you win!';
-        else if (m.solved !== o.solved) t = m.solved > o.solved ? 'You win!' : 'You lose';
-        else t = m.lives === o.lives ? 'Draw' : m.lives > o.lives ? 'You win (fewer mistakes)' : 'You lose (more mistakes)';
-        ov(`<div class="bt-big">${t}</div><div>${esc(m.name)}: ${m.solved} solved · ${LIVES - m.lives} wrong</div>` +
-            (o ? `<div>${esc(o.name)}: ${o.solved} solved · ${LIVES - o.lives} wrong</div>` : '') + '<button class="pri" id="btOvLeave" type="button">Leave room</button>');
+        let t, w = 0;                                                              // w: 1 = you won, -1 = opponent won, 0 = draw
+        if (!o) { t = 'Opponent left<br>You Win!'; w = 1; }
+        else if (m.solved !== o.solved) { w = m.solved > o.solved ? 1 : -1; t = w > 0 ? 'You win!' : 'You lose'; }
+        else if (m.lives !== o.lives) { w = m.lives > o.lives ? 1 : -1; t = w > 0 ? 'You win (fewer mistakes)' : 'You lose (more mistakes)'; }
+        else t = 'Draw';
+        const row = (p, win) => `<div class="bt-rl ${win ? 'win' : ''}">${avImg(p.avatar, 'ava md')}<div class="who"><b class="nm">${esc(p.name)}</b><span class="sc">${LIVES - p.lives} wrong</span></div><b class="bt-pts">${p.solved}<small>solved</small></b></div>`;
+        const again = o ? `<button class="pri" id="btAgain" type="button" ${m.again ? 'disabled' : ''}>Play again</button>` : '';
+        const note = o ? (m.again ? 'Waiting for ' + esc(o.name) + '…' : o.again ? esc(o.name) + ' wants to play again' : '') : '';
+        ov(`<div class="bt-big">${t}</div><div class="bt-res">${row(m, w > 0)}${o ? row(o, w < 0) : ''}</div>` +
+            `<div class="bt-acts">${again}<button id="btOvLeave" type="button">Leave room</button></div>` + (note ? `<div class="bt-note">${note}</div>` : ''));
+        const g = $('#btAgain'); if (g) g.onclick = () => F.set(R('players/' + uid + '/again'), true);
         const b = $('#btOvLeave'); if (b) b.onclick = leave;
     }
 
