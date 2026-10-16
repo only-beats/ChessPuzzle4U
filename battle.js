@@ -29,7 +29,7 @@ export function initBattle(api) {
         '<div id="btHud" class="bt-hud hidden"><div id="btMe" class="bt-pl"></div><div id="btTime" class="bt-time">0:00</div>' +
         '<div id="btOp" class="bt-pl"></div><button id="btLeave" class="ghost" type="button">Leave</button></div>');
     $('.bwrap').insertAdjacentHTML('beforeend', '<div id="btOv" class="bt-ov hidden"></div>');
-    $('#solver .btns').insertAdjacentHTML('beforeend', '<button id="btnBattle" class="ib" type="button"><img src="svg/battle.svg" alt=""><span>Play Online Puzzle Battle</span></button>');
+    $('#solver .btns').insertAdjacentHTML('beforeend', '<button id="btnBattle" class="ib" type="button" aria-label="Play Online Puzzle Battle"><img src="svg/battle.svg" alt=""></button>');
 
     const dlg = $('#btDlg');
     const ov = h => { const o = $('#btOv'); o.innerHTML = h; o.classList.toggle('hidden', !h); };
@@ -61,7 +61,7 @@ export function initBattle(api) {
     const avPick = () => '<div class="setlbl">Avatar</div><div class="bt-avs">' +
         AVATARS.map(a => `<button type="button" class="bt-av ${sel.av === a ? 'on' : ''}" data-av="${a}" title="${a}">${avImg(a)}</button>`).join('') + '</div>';
     function view() {
-        let h = '<h3>Puzzle Battle <button class="ghost" data-a="close" type="button">✕</button></h3>';
+        let h = '<h3>Play Online Puzzle Battle <button class="ghost" data-a="close" type="button">✕</button></h3>';
         if (err) h += `<div class="msg err">${esc(err)}</div>`;
         if (room && data) {                                                       // ----- lobby
             const link = location.origin + location.pathname + '#battle=' + room;
