@@ -1,7 +1,7 @@
-import { firebaseConfig, SOUNDS, CATS } from './config.js';
-import { SEED } from './puzzles-seed.js';
-import { initAnalysis } from './Analysis.js';
-import { initBattle } from './battle.js';
+import { firebaseConfig, SOUNDS, CATS } from './config.js?v=2';
+import { SEED } from './puzzles-seed.js?v=2';
+import { initAnalysis } from './Analysis.js?v=2';
+import { initBattle } from './battle.js?v=2';
 
 const $ = s => document.querySelector(s);
 const norm = s => (s || '').replace(/[+#!?]/g, '');
