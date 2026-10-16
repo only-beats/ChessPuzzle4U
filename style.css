@@ -1970,3 +1970,63 @@ body.bt main {
   padding: 4px 0;
   font-size: 14px
 }
+
+/* label hidden until hover (tooltip above the button) */
+.btns button.ib {
+  position: relative
+}
+
+.btns button.ib span {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  text-align: center
+}
+
+@media (hover: hover) {
+  .btns button.ib {
+    padding: 14px 8px
+  }
+
+  .btns button.ib span {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%) translateY(4px);
+    background: #000;
+    color: #fff;
+    padding: 6px 10px;
+    border-radius: 8px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .15s, transform .15s;
+    z-index: 10
+  }
+
+  .btns button.ib:hover span,
+  .btns button.ib:focus-visible span {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0)
+  }
+}
+
+/* small icon buttons */
+.btns button.ib,
+#btnBattle {
+  height: 52px;
+  padding: 0 8px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center
+}
+
+.btns button.ib img,
+#btnBattle img {
+  width: 22px !important;
+  height: 22px !important;
+  max-width: 22px;
+  max-height: 22px;
+  object-fit: contain;
+  flex: none
+}
