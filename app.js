@@ -61,7 +61,7 @@ async function loadFilePuzzles() {
 const PER = 5;                                                           // puzzles shown per page in the list
 const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 const PUZ_FILE = './puzzles-lichess.js';
-const PUZ_VER = 2;   // change to 3, 4 ... each time you upload a new puzzles-lichess.js
+const PUZ_VER = 3;   // change to 3, 4 ... each time you upload a new puzzles-lichess.js
 const FB = !String(firebaseConfig.apiKey).startsWith('PASTE');
 let puzzles = [...SEED], db = null, auth = null, F = {}, isAdmin = false, catK = 0;
 let BT = null, cur, game, sol, alt, tree, node, autoT, page = 0, promoMove = null, step = 0, user, flip, last, sel, targets = [], wrong, busy, done, hintLvl, fbSq, fbIcon, log = [];
