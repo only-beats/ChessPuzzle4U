@@ -15,7 +15,7 @@ export function initBattle(api) {
     const fmt = ms => { const s = Math.max(0, Math.ceil(ms / 1000)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 
     let db, F, auth, uid, offset = 0, room = '', joinId = HASH_ROOM, data = null, unsub = null, tick = null, disc = null;
-    let my = null, started = false, over = false, lock = true, err = '', round = 0;
+    let my = null, started = false, over = false, lock = true, err = '', round = 0, final = null;   // final = opponent's last scores, kept so the result can't flip if they leave
     const sel = { time: 180, cat: 0, lo: null, hi: null, av: AVATARS.includes(localStorage.cp4uAv) ? localStorage.cp4uAv : AVATARS[0] };   // lo/hi null = whole rating range
     const now = () => Date.now() + offset;
     let tenDone = false, oppAgain = false, tenAudio = null;
@@ -218,7 +218,7 @@ export function initBattle(api) {
     }
     function play() {
         closeDlg(); document.body.classList.add('bt'); api.setBT(BT); $('#btHud').classList.remove('hidden'); window.dispatchEvent(new Event('resize'));
-        my = { ...data.players[uid] }; round = data.round || 0; tenDone = false; stopTen();
+        my = { ...data.players[uid] }; round = data.round || 0; tenDone = false; final = null; stopTen();
         tick = setInterval(loop, 250); loop();
     }
     function loop() {
@@ -267,15 +267,18 @@ export function initBattle(api) {
     };
     function outScreen() { if (!over) ov('<div class="bt-big">Game over</div><div>You used all 3 lives. Your opponent is still playing…</div>'); }
     function result() {
-        const m = data.players[uid], o = others()[0];
+        const m = data.players[uid]; let o = others()[0], left = false;
+        if (o) final = { ...o };                                                    // remember the opponent's final scores
+        else if (final) { o = final; left = true; }                                 // opponent left AFTER the game ended -> keep the real result
         let t, w = 0;                                                              // w: 1 = you won, -1 = opponent won, 0 = draw
         if (!o) { t = 'Opponent left<br>You Win!'; w = 1; }
         else if (m.solved !== o.solved) { w = m.solved > o.solved ? 1 : -1; t = w > 0 ? 'You win!' : 'You lose'; }
         else if (m.lives !== o.lives) { w = m.lives > o.lives ? 1 : -1; t = w > 0 ? 'You win (fewer mistakes)' : 'You lose (more mistakes)'; }
         else t = 'Draw';
+        if (left) t += '<br><small>Opponent left</small>';
         const row = (p, win) => `<div class="bt-rl ${win ? 'win' : ''}">${avImg(p.avatar, 'ava md')}<div class="who"><b class="nm">${esc(p.name)}</b><span class="sc">${LIVES - p.lives} wrong</span></div><b class="bt-pts">${p.solved}<small>solved</small></b></div>`;
-        const again = o ? `<button class="pri" id="btAgain" type="button" ${m.again ? 'disabled' : ''}>Play again</button>` : '';
-        const note = o ? (m.again ? 'Waiting for ' + esc(o.name) + '…' : o.again ? esc(o.name) + ' wants to play again' : '') : '';
+        const again = o && !left ? `<button class="pri" id="btAgain" type="button" ${m.again ? 'disabled' : ''}>Play again</button>` : '';
+        const note = o && !left ? (m.again ? 'Waiting for ' + esc(o.name) + '…' : o.again ? esc(o.name) + ' wants to play again' : '') : '';
         ov(`<div class="bt-big">${t}</div><div class="bt-res">${row(m, w > 0)}${o ? row(o, w < 0) : ''}</div>` +
             `<div class="bt-acts">${again}<button id="btOvLeave" type="button">Leave room</button></div>` + (note ? `<div class="bt-note">${note}</div>` : ''));
         const g = $('#btAgain'); if (g) g.onclick = () => F.set(R('players/' + uid + '/again'), true);
