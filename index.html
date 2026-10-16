@@ -22,6 +22,16 @@
   <meta property="og:image" content="icons/brilliant.png">
 
   <link rel="stylesheet" href="style.css">
+  <!-- Image protection: no drag / save / long-press-save on images -->
+  <style>
+    img, svg, picture, canvas, video {
+      -webkit-user-drag: none;
+      user-drag: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+  </style>
 </head>
 
 <body class="sk-on">
@@ -169,6 +179,15 @@
     </form>
   </dialog>
 
+  <script>
+    /* block right-click menu, dragging and "save image" on all images / svg */
+    (function () {
+      var isImg = function (t) { return t && t.closest && t.closest('img, svg, picture, canvas, video'); };
+      document.addEventListener('contextmenu', function (e) { if (isImg(e.target)) e.preventDefault(); }, true);
+      document.addEventListener('dragstart', function (e) { if (isImg(e.target)) e.preventDefault(); }, true);
+      document.addEventListener('copy', function (e) { if (isImg(e.target)) e.preventDefault(); }, true);
+    })();
+  </script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
   <script type="module" src="app.js"></script>
 </body>
