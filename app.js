@@ -731,7 +731,7 @@ function fitBoard() {
   const cs = getComputedStyle(card), ms = getComputedStyle($('main'));
   const inner = card.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
   const an = $('#anLine');                                                    // engine box must not take space from the board
-  const anH = an ? an.offsetHeight + parseFloat(getComputedStyle(an).marginTop) : 0;
+  const anH = an && an.offsetParent ? an.offsetHeight + parseFloat(getComputedStyle(an).marginTop) : 0;
   const other = card.offsetHeight - wrap.offsetHeight - anH;                  // everything in the card except the board + engine box
   const room = window.innerHeight - $('header').offsetHeight - parseFloat(ms.paddingTop) - parseFloat(ms.paddingBottom) - other - 2;
   root.setProperty('--bs', Math.max(260, Math.min(inner, Math.floor(room))) + 'px');
