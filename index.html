@@ -24,9 +24,13 @@
   <link rel="stylesheet" href="style.css">
   <!-- Image protection: no drag / save / long-press-save on images -->
   <style>
-    img, svg, picture, canvas, video {
+    img,
+    svg,
+    picture,
+    canvas,
+    video {
       -webkit-user-drag: none;
-      user-drag: none;
+      -webkit-user-select: none;
       user-select: none;
       -webkit-touch-callout: none;
     }
@@ -66,8 +70,10 @@
       </div>
       <div id="pager" class="pager"><button disabled>Prev</button><span></span><button disabled>Next</button></div>
       <div class="btns">
-        <button id="bHint">Hint</button><button id="bSol">Solution</button>
-        <button id="bReset">Retry</button><button id="bNext" class="pri">Next</button>
+        <button id="bHint" class="ib"><img src="svg/hint.svg" alt=""><span>Hint</span></button>
+        <button id="bSol" class="ib"><img src="svg/solution.svg" alt=""><span>Solution</span></button>
+        <button id="bReset" class="ib"><img src="svg/retry.svg" alt=""><span>Retry</span></button>
+        <button id="bNext" class="ib pri"><img src="svg/next.svg" alt=""><span>Next</span></button>
       </div>
       <div id="moves" class="moves"></div>
     </section>
