@@ -1984,32 +1984,6 @@ body.bt main {
   text-align: center
 }
 
-@media (hover: hover) {
-  .btns button.ib {
-    padding: 14px 8px
-  }
-
-  .btns button.ib span {
-    position: absolute;
-    bottom: calc(100% + 8px);
-    left: 50%;
-    transform: translateX(-50%) translateY(4px);
-    background: #000;
-    color: #fff;
-    padding: 6px 10px;
-    border-radius: 8px;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity .15s, transform .15s;
-    z-index: 10
-  }
-
-  .btns button.ib:hover span,
-  .btns button.ib:focus-visible span {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0)
-  }
-}
 
 /* small icon buttons */
 .btns button.ib,
