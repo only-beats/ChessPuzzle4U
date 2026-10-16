@@ -2004,3 +2004,175 @@ body.bt main {
   object-fit: contain;
   flex: none
 }
+
+/* 3 buttons per row on small screens, 6 on wide screens */
+#solver .btns {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px
+}
+
+@media (min-width: 900px) {
+  #solver .btns {
+    grid-template-columns: repeat(6, 1fr)
+  }
+}
+
+#bAna.on {
+  background: linear-gradient(180deg, var(--g1), var(--g2))
+}
+
+#bAna.on img {
+  filter: brightness(.2)
+}
+
+/* engine arrow on the main board */
+.ma-arrows {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 6
+}
+
+.bwrap {
+  max-width: 100%
+}
+
+.anline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 10px;
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.4
+}
+
+.anline.off {
+  display: none
+}
+
+.an-note {
+  color: var(--m);
+  font-size: 12px
+}
+
+.an-note b {
+  color: var(--t)
+}
+
+.an-main {
+  display: flex;
+  gap: 10px;
+  align-items: center
+}
+
+.an-mv {
+  flex: 1;
+  min-width: 0
+}
+
+#anUndo {
+  flex: none;
+  padding: 4px 7px;
+  font-size: 16px
+}
+
+.anline .an-ev {
+  flex: none;
+  min-width: 60px;
+  text-align: center;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font-weight: 700;
+  background: #fff;
+  color: #111
+}
+
+.anline .an-ev.neg {
+  background: #111;
+  color: #fff;
+  border: 1px solid #555
+}
+
+/* large screens: keep the box's space reserved so the board never changes size */
+@media (min-width: 861px) {
+  .anline {
+    height: 72px;
+    box-sizing: border-box;
+    overflow: hidden
+  }
+
+  .anline.off {
+    display: flex;
+    visibility: hidden
+  }
+
+  .an-note,
+  .an-mv {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis
+  }
+
+  #solver:has(#bAna.on) #moves {
+    display: none
+  }
+}
+
+/* analysis mode: moves row only as tall as its content, so the engine box sits right under it */
+#solver:has(#bAna.on) .moves {
+  height: auto;
+  min-height: 0;
+  max-height: 46px;
+  margin-top: 8px;
+}
+
+#solver:has(#bAna.on) .anline {
+  margin-top: 6px;
+}
+
+.anline img.sf {
+  width: 1.3em;
+  height: 1.3em;
+  vertical-align: -0.28em;
+  margin-right: 1px;
+  display: inline-block;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* engine box: light, tinted with the board theme colour */
+.anline {
+  background: color-mix(in srgb, var(--g1) 55%, #f4f2ee);
+  border-color: color-mix(in srgb, var(--g2) 80%, transparent);
+  color: #1a1917;
+}
+
+.anline .an-note,
+.anline .an-note b,
+.anline .an-mv {
+  color: #1a1917;
+}
+
+.anline .mut,
+.anline .an-mv .mut {
+  color: #5c5953;
+  /* move numbers + "depth 16" */
+}
+
+/* dark outline: white pieces stay visible on the light box, black pieces stay crisp */
+.anline img.sf {
+  filter: drop-shadow(0 0 .6px #000) drop-shadow(0 0 .6px #000);
+}
+
+/* undo button */
+#anUndo {
+  background: color-mix(in srgb, var(--g2) 30%, #fff);
+  color: #1a1917;
+}
