@@ -166,7 +166,7 @@ function checkTree(nd, g) {
 
 /* ---------- solver ---------- */
 function open(p, scroll = false) {
-  clearTimeout(autoT); voiceTok++; if (voiceAudio) voiceAudio.pause();
+  anStop(); clearTimeout(autoT); voiceTok++; if (voiceAudio) voiceAudio.pause();
   cur = p; game = new Chess(p.fen); alt = {};
   tree = p.pgn ? parseTree(p.pgn) : null; node = tree;
   sol = tree ? mainLine(tree) : p.solution;
@@ -220,6 +220,7 @@ function tryMove(from, to, promo = 'q') {
   return true;
 }
 function reply() {
+  if (AN.on || !busy || done) return;                                    // paused by analysis (or already played)
   let m;
   if (tree) { const r = node.kids[0]; m = game.move(r.san, { sloppy: true }); node = r; }
   else m = game.move(sol[step], { sloppy: true });
@@ -252,14 +253,15 @@ $('#promo').onclick = e => {
 };
 
 $('#board').onclick = e => {
-  const el = e.target.closest('.sq'); if (!el || !cur || busy || done) return;
+  const el = e.target.closest('.sq'); if (AN.on && el) return anClick(el.dataset.sq);
+  if (!el || !cur || busy || done) return;
   const sq = el.dataset.sq;
   if (sel && sel !== sq) { if (isPromo(sel, sq)) return askPromo(sel, sq); if (tryMove(sel, sq)) return; }
   const pc = game.get(sq); sel = pc && pc.color === user ? sq : null;
   targets = sel ? game.moves({ square: sq, verbose: true }).map(m => m.to) : []; draw();
 };
 $('#bHint').onclick = () => {
-  if (!cur || done || busy) return;
+  if (!cur || done || busy || AN.on) return;
   const want = tree ? node.kids.map(k => k.san) : [norm(sol[step])];
   const m = game.moves({ verbose: true }).find(m => want.includes(norm(m.san))); if (!m) return;
   sel = m.from; targets = hintLvl ? [m.to] : []; hintLvl++; msg(hintLvl > 1 ? 'Play the highlighted move.' : 'Hint: move this piece.'); draw();
@@ -271,8 +273,126 @@ $('#bNext').onclick = () => {
 };
 $('#bSol').onclick = () => {
   if (!cur) return; open(cur); done = busy = true; msg('Solution:');
-  sol.forEach((s, i) => setTimeout(() => { const m = game.move(s, { sloppy: true }); if (!m) return; last = m; log.push(m.san); moveSound(m); draw(); }, 850 * (i + 1)));
+  sol.forEach((s, i) => setTimeout(() => { if (AN.on) return; const m = game.move(s, { sloppy: true }); if (!m) return; last = m; log.push(m.san); moveSound(m); draw(); }, 850 * (i + 1)));
 };
+
+/* ---------- Analysis on the main board (1 engine line + arrow, free moves, never counted in the puzzle) ---------- */
+const SF_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js';
+const AN = { on: false, sf: null, ready: false, run: false, want: false, ign: false, fen: '', info: null, t: null, dt: null, n: 0, logLen: 0, last0: null, msg0: '', cls0: '', top: null, cmp: null };
+const anSoon = () => { if (!AN.dt) AN.dt = setTimeout(() => { AN.dt = null; anDraw(); }, 120); };
+
+function anEnsure() {
+  if (AN.sf) return;
+  try { AN.sf = new Worker(URL.createObjectURL(new Blob([`importScripts('${SF_URL}');`], { type: 'application/javascript' }))); }
+  catch { anBox('', '<span class="mut">Engine could not start.</span>'); return; }
+  AN.sf.onmessage = e => anMsg(String(e.data));
+  AN.sf.onerror = () => { AN.sf = null; AN.ready = false; AN.run = false; anBox('', '<span class="mut">Engine failed to load (internet / ad-blocker?).</span>'); };
+  AN.sf.postMessage('uci');
+}
+function anMsg(line) {
+  if (line === 'uciok') return AN.sf.postMessage('isready');
+  if (line === 'readyok') { AN.ready = true; return anRequest(); }
+  if (line.startsWith('bestmove')) { AN.run = false; AN.ign = false; if (AN.want) anSearch(); else anSoon(); return; }
+  if (AN.ign || !line.startsWith('info') || /lowerbound|upperbound/.test(line)) return;
+  const m = line.match(/depth (\d+).*?score (cp|mate) (-?\d+).*? pv (.+)$/); if (!m) return;
+  AN.info = { depth: +m[1], kind: m[2], val: +m[3], pv: m[4].trim().split(/\s+/) }; anSoon();
+}
+function anSearch() {
+  AN.want = false; AN.info = null;
+  if (!AN.on || !AN.sf || game.game_over()) return anDraw();
+  AN.fen = game.fen(); AN.run = true; AN.ign = false;
+  AN.sf.postMessage('setoption name MultiPV value 1'); AN.sf.postMessage('position fen ' + AN.fen); AN.sf.postMessage('go depth 16');
+  anDraw();
+}
+function anRequest() {                                   // analyse the position that is on the board now
+  if (!AN.on) return;
+  anEnsure(); if (!AN.sf || !AN.ready) return;
+  clearTimeout(AN.t);
+  AN.t = setTimeout(() => { if (AN.run) { AN.want = true; AN.ign = true; AN.sf.postMessage('stop'); } else anSearch(); }, 200);
+}
+function anArrow(a, b, color, op, w) {
+  const c = s => { const f = 'abcdefgh'.indexOf(s[0]), r = +s[1] - 1, col = flip ? 7 - f : f, row = flip ? r : 7 - r; return [(col + .5) * 12.5, (row + .5) * 12.5]; };
+  const [x1, y1] = c(a), [x2, y2] = c(b), dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len, hl = 3.8, hw = 2.7;
+  const sx = x1 + ux * 2, sy = y1 + uy * 2, ex = x2 - ux * (hl + .8), ey = y2 - uy * (hl + .8);
+  const tx = x2 - ux, ty = y2 - uy, bx = x2 - ux * (hl + 1), by = y2 - uy * (hl + 1), px = -uy, py = ux;
+  return `<line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" stroke="${color}" stroke-width="${w}" stroke-linecap="round" opacity="${op}"/>`
+    + `<polygon points="${tx},${ty} ${bx + px * hw},${by + py * hw} ${bx - px * hw},${by - py * hw}" fill="${color}" opacity="${op}"/>`;
+}
+
+// SAN with the selected piece set: "Qg1" -> [queen icon]g1
+const sanFig = (san, col) => /^[KQRBN]/.test(san)
+  ? `<img class="sf" src="${PIECE(col, san[0].toLowerCase())}" alt="${san[0]}" draggable="false" onerror="this.onerror=null;this.src='${LICHESS(col, san[0].toLowerCase())}'">${san.slice(1)}`
+  : san;
+// box under the board: small note on top (what you played vs. the engine's best) + eval and engine line
+const anNote = ev => {
+  const c = AN.cmp; if (!c) return '';
+  return c.same ? `✔ <b>${sanFig(c.played, c.col)}</b> is the engine's top move` : `You played <b>${sanFig(c.played, c.col)}</b>${ev ? ' (' + ev + ')' : ''} · best was <b>${sanFig(c.best, c.col)}</b> (${c.bestEv})`;
+};
+function anBox(note, main) {
+  const undo = AN.n ? '<button id="anUndo" type="button" class="ghost" aria-label="Take back the last move">↩</button>' : '';
+  $('#anLine').innerHTML = `<div class="an-note">${note || anNote('')}</div><div class="an-main">${main}${undo}</div>`;
+}
+function anDraw() {
+  const svg = $('#anArrows');
+  if (!AN.on) { svg.innerHTML = ''; $('#anLine').innerHTML = ''; return; }
+  if (game.game_over()) { svg.innerHTML = ''; return anBox(anNote(''), '<span class="mut">Game over – no engine moves.</span>'); }
+  if (!AN.info || AN.fen !== game.fen()) { svg.innerHTML = ''; return anBox(anNote(''), '<span class="mut">' + (AN.sf ? 'Engine is thinking…' : 'Loading engine…') + '</span>'); }
+  const r = AN.info, parts = AN.fen.split(' '), mul = parts[1] === 'w' ? 1 : -1, g = new Chess(AN.fen), sans = [], ucis = [];
+  for (const u of r.pv.slice(0, 12)) { const m = g.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] }); if (!m) break; sans.push(m.san); ucis.push(u); }
+  if (!sans.length) return;
+  const wv = (r.kind === 'mate' ? (r.val > 0 ? 1e4 : -1e4) : r.val) * mul;
+  const ev = r.kind === 'mate' ? (r.val * mul < 0 ? '-' : '') + '#' + Math.abs(r.val) : (wv > 0 ? '+' : '') + (wv / 100).toFixed(2);
+  AN.top = { fen: AN.fen, uci: ucis[0], san: sans[0], ev };                // remembered to compare with the next move the player makes
+  let n = parseInt(parts[5]) || 1, c = parts[1], mv = '';
+  sans.forEach((san, j) => { mv += (c === 'w' ? `<span class="mut">${n}.</span> ` : j === 0 ? `<span class="mut">${n}...</span> ` : '') + sanFig(san, c) + ' '; if (c === 'b') n++; c = c === 'w' ? 'b' : 'w'; });
+  anBox(anNote(ev), `<span class="an-ev ${wv < 0 ? 'neg' : ''}">${ev}</span><div class="an-mv">${mv}<span class="mut">· depth ${r.depth}${AN.run ? ' …' : ''}</span></div>`);
+  svg.innerHTML = anArrow(ucis[0].slice(0, 2), ucis[0].slice(2, 4), '#4da3ff', .9, 1.7);
+}
+function anStart() {
+  if (!cur) return;
+  AN.msg0 = $('#msg').textContent; AN.cls0 = $('#msg').className.replace('msg', '').trim();
+  AN.n = 0; AN.logLen = log.length; AN.last0 = last; AN.top = AN.cmp = null;                // remember the puzzle position so it can be restored
+  AN.on = true; clearTimeout(autoT); voiceTok++; if (voiceAudio) voiceAudio.pause();      // stop auto-next and any voice
+  sel = fbSq = null; targets = []; promoMove = null; $('#promo').classList.add('hidden');
+  $('#bAna').classList.add('on'); $('#anLine').classList.remove('off');
+  msg('Analysis mode');
+  draw(); AN.info = null; anDraw(); anRequest();
+}
+function anStop() {                                      // leave analysis mode (the board is NOT touched here)
+  AN.on = false; clearTimeout(AN.t); AN.want = false; if (AN.sf && AN.run) { AN.ign = true; AN.sf.postMessage('stop'); }
+  AN.info = AN.top = AN.cmp = null; AN.fen = '';
+  $('#bAna').classList.remove('on'); $('#anArrows').innerHTML = ''; $('#anLine').innerHTML = ''; $('#anLine').classList.add('off');
+}
+function anExit() {                                      // 2nd click on Analysis: take back all test moves and carry on with the puzzle
+  while (AN.n > 0) { game.undo(); AN.n--; }
+  log.length = AN.logLen; last = AN.last0; sel = null; targets = [];
+  anStop();
+  if (done) msg('Solved – press Next for the next puzzle.', 'ok'); else msg(AN.msg0, AN.cls0);
+  draw();
+  if (busy && !done) {                                   // the opponent's reply (or the final step) was still waiting when analysis started
+    if (game.in_checkmate() || (tree ? !node.kids.length : step >= sol.length)) finish(); else reply();
+  }
+}
+function anUndo() {
+  if (!AN.n) return;
+  game.undo(); AN.n--; log.pop(); AN.cmp = null; sel = null; targets = [];
+  const h = game.history({ verbose: true }); last = h.length ? h[h.length - 1] : null;
+  draw(); AN.info = null; anDraw(); anRequest();
+}
+function anClick(sq) {
+  if (sel && sel !== sq) {
+    const prev = AN.info && AN.top && AN.fen === game.fen() ? { ...AN.top } : null;       // engine's best move BEFORE this move
+    const mv = game.move({ from: sel, to: sq, promotion: 'q' });
+    if (mv) {
+      AN.cmp = prev ? { col: mv.color, played: mv.san, best: prev.san, bestEv: prev.ev, same: prev.uci === mv.from + mv.to + (mv.promotion || '') } : null;
+      AN.n++; last = mv; log.push(mv.san); sel = null; targets = []; moveSound(mv); draw(); AN.info = null; anDraw(); anRequest(); return;
+    }
+  }
+  const pc = game.get(sq); sel = pc && pc.color === game.turn() ? sq : null;
+  targets = sel ? game.moves({ square: sq, verbose: true }).map(m => m.to) : []; draw();
+}
+$('#anLine').onclick = e => { if (e.target.closest('#anUndo')) anUndo(); };
+$('#bAna').onclick = () => { if (!cur) return; if (AN.on) anExit(); else anStart(); };
 
 /* ---------- list ---------- */
 const _k = new WeakMap();
@@ -610,7 +730,9 @@ function fitBoard() {
   if (window.innerWidth <= 860) return root.removeProperty('--bs');          // phones/tablets: normal page scroll
   const cs = getComputedStyle(card), ms = getComputedStyle($('main'));
   const inner = card.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-  const other = card.offsetHeight - wrap.offsetHeight;                        // everything in the card except the board
+  const an = $('#anLine');                                                    // engine box must not take space from the board
+  const anH = an ? an.offsetHeight + parseFloat(getComputedStyle(an).marginTop) : 0;
+  const other = card.offsetHeight - wrap.offsetHeight - anH;                  // everything in the card except the board + engine box
   const room = window.innerHeight - $('header').offsetHeight - parseFloat(ms.paddingTop) - parseFloat(ms.paddingBottom) - other - 2;
   root.setProperty('--bs', Math.max(260, Math.min(inner, Math.floor(room))) + 'px');
 }
