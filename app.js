@@ -24,7 +24,7 @@ const BOARDS = [
   { k: 'green', n: 'Green', l: '#eeeed2', d: '#769656' }, { k: 'lavender', n: 'Lavender', l: '#efeff3', d: '#8476ba' }, { k: 'pink', n: 'Pink', l: '#fbe9ee', d: '#e49bb0' },
   { k: 'sand', n: 'Sand', img: 'sand', a: '#b8a590' }
 ];
-const BOTS = [{ k: 'jade', n: 'Jade', img: 'Bots/Jade.png' }, { k: 'oliver', n: 'Oliver', img: 'Bots/Oliver.png' }, { k: 'off', n: 'Voice off' }];
+const BOTS = [{ k: 'jade', n: 'Jade', img: 'Bots/Jade.png' }, { k: 'oliver', n: 'Oliver', img: 'Bots/Oliver.png' }, { k: 'sakura', n: 'Sakura', img: 'Bots/Sakura.png' }, { k: 'off', n: 'Voice off' }];
 const cfg = { board: localStorage.cp4uBoard || 'aquamarine', pieces: localStorage.cp4uPieces || 'neo', bot: localStorage.cp4uBot || 'jade', sound: localStorage.cp4uSound !== '0' };
 const PIECE = (c, t) => {
   const p = PIECES.find(x => x.k === cfg.pieces) || PIECES[0];
@@ -95,10 +95,13 @@ let voiceTok = 0, voiceAudio = null;
 function sacVoice(mv) {
   if (mv.piece === 'k') return '';
   if (mv.promotion) return 'brilliant-promotion-' + PNAME[mv.promotion];   // dxe1=N → knight promotion
-  const taken = mv.captured ? VAL[mv.captured] : 0;
-  const attacked = game.moves({ verbose: true }).some(o => o.to === mv.to && o.captured);
-  // a bigger piece captures a smaller one (Bxg2) = sacrifice, even if it can't be recaptured
-  return (attacked || mv.captured) && VAL[mv.piece] > taken ? 'brilliant-' + PNAME[mv.piece] : '';
+  const taken = mv.captured ? VAL[mv.captured] : 0, worth = VAL[mv.piece] > taken;
+  // 1) the piece can really be captured on its next move = a real sacrifice
+  if (worth && game.moves({ verbose: true }).some(o => o.to === mv.to && o.captured)) return 'brilliant-' + PNAME[mv.piece];
+  // 2) it gives check / mate and cannot be captured -> the "check" / "move" voice speaks instead
+  if (game.in_check()) return '';
+  // 3) quiet capture of a smaller piece that cannot be recaptured (Bxg2) -> still a sacrifice
+  return mv.captured && worth ? 'brilliant-' + PNAME[mv.piece] : '';
 }
 const voiceText = v => {
   const p = v.split('-');
