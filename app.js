@@ -201,7 +201,7 @@ function tryMove(from, to, promo = 'q') {
     last = mv; step++; log.push(mv.san); fbSq = mv.to; fbIcon = brilliant ? 'brilliant' : 'best';
     if (tree) node = kid || { san: norm(mv.san), raw: mv.san, kids: [] };
     moveSound(mv, true);                                                  // promote.mp3 already played when the dialog opened
-    const kind = !brilliant ? '' : game.in_checkmate() ? 'move-' : game.in_check() ? 'check-' : '';
+    const kind = !brilliant ? '' : mv.piece === 'k' ? 'move-' : game.in_checkmate() ? 'move-' : game.in_check() ? 'check-' : '';   // king: always "move-king" (there is no check-king file)
     const v = (cfg.bot === 'off' || !cfg.sound || BT) ? '' : (brilliant ? sacVoice(mv) : '') || (kind ? kind + PNAME[mv.piece] : '');
     console.log('move:', mv.san, '| piece:', mv.piece, '| lichess:', !!cur.lichess, '| mate:', game.in_checkmate(), '| voice:', v || 'none');
     if (game.in_checkmate() || (tree ? !node.kids.length : step >= sol.length)) {
