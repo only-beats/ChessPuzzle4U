@@ -481,6 +481,14 @@ $('#btnLogin').onclick = () => {
   if (isAdmin) return $('#admin').scrollIntoView({ behavior: 'smooth' });
   if (!FB) return alert('Add your Firebase apiKey/appId in config.js first (see README).'); $('#dlg').showModal();
 };
+// Admin button is hidden (see style.css) -> tap / click the logo 3 times quickly to open the same admin action
+(() => {
+  let taps = 0, timer = null;
+  $('.brand').addEventListener('click', () => {
+    taps++; clearTimeout(timer); timer = setTimeout(() => { taps = 0; }, 700);
+    if (taps >= 3) { taps = 0; clearTimeout(timer); $('#btnLogin').onclick(); }
+  });
+})();
 $('#lCancel').onclick = () => $('#dlg').close();
 const lmsg = (t, c = 'err') => { $('#lMsg').textContent = t; $('#lMsg').className = 'msg ' + c; };
 $('#lGo').onclick = async e => {
