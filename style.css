@@ -68,7 +68,15 @@ header {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 19px
+  font-size: 19px;
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent
+}
+
+#btnLogin {
+  display: none !important
 }
 
 .brand img {
