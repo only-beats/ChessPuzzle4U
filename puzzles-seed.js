@@ -205,10 +205,7 @@ export const SEED = [
         id: 63, date: "1959", white: "Paul Keres", black: "Tigran Petrosian", result: "0-1", fen: "6kr/3b4/1p1p4/p1n2p2/1PPNpP1q/P3Q1p1/1R1RB1P1/5K2 b - - 0 1", solution: ["Qxf4+", "Bf3", "Qxe3", "Bh5", "Rxh5", "Nf3", "Rh1+", "Ng1", "Rxg1#",], description: "Black moves and wins in 5.", category: "Mate in 5"
     },
     {
-        id: 64, date: "?", white: "Li", black: "Alitha", result: "1-0",
-        fen: "2q1nk1r/4Rp2/1ppp1P2/6Pp/3p1B2/3P3P/PPP1Q3/6K1 w - - 0 0",
-        pgn: "1. Rxe8+ Qxe8 2. Bxd6+ Qe7 3. Qxe7+ Kg8 4. Qf8+ (4. Qe8+ Kh7 5. Qxf7#) 4... Kh7 5. Qxf7# (5. Qg7#) 1-0",
-        description: "White moves and wins in 5.", category: "Mate in 5"
+        id: 64, date: "?", white: "Unknown", black: "Unknown", result: "1-0", fen: "8/5K2/8/7p/k7/2B5/1P6/8 w - - 0 1", solution: ["Ke6", "h4", "Kd5", "h3", "Kc4", "h2", "Bb4", "h1=Q", "b3#",], description: "White moves and wins in 5.", category: "Mate in 5"
     },
     {
         id: 65, date: "2003", white: "Magnus Carlsen", black: "Hans Harestad", result: "1-0", fen: "r7/3bb1kp/q4p1N/1pnPp1np/2p4Q/2P5/1PB3P1/2B2RK1 w - - 0 1", solution: ["Qxg5+", "fxg5", "Rf7+", "Kh8", "Rxh7#",], description: "White moves and wins in 3.", category: "Mate in 3"
@@ -1101,9 +1098,6 @@ export const SEED = [
     },
     {
         id: 332, date: "?", white: "Unknown", black: "Unknown", result: "0-1", fen: "3r1k1r/1pN1bppp/2p3q1/8/Q3R3/7b/PPP2PPP/R1B2BK1 b - - 0 1", solution: ["Qxg2+", "Bxg2", "Rd1+", "Re1", "Rxe1+", "Bf1", "Rxf1#",], description: "Black moves and wins in 4.", category: "Mate in 4"
-    },
-    {
-        id: 333, date: "?", white: "Unknown", black: "Unknown", result: "1-0", fen: "8/5K2/8/7p/k7/2B5/1P6/8 w - - 0 1", solution: ["Ke6", "h4", "Kd5", "h3", "Kc4", "h2", "Bb4", "h1=Q", "b3#",], description: "White moves and wins in 5.", category: "Mate in 5"
     },
 
 
