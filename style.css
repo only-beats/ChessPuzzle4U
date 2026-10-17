@@ -58,7 +58,7 @@ header {
   padding: 12px 22px;
   border-bottom: 1px solid var(--line);
   background: color-mix(in srgb, var(--bg) 70%, transparent);
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(7px);
   position: sticky;
   top: 0;
   z-index: 50
@@ -1680,7 +1680,8 @@ body.bt main {
   gap: 8px;
   padding: 16px;
   text-align: center;
-  background: rgba(0, 0, 0, .72);
+  background: rgba(10, 8, 18, .55);
+  backdrop-filter: blur(2px);
   border-radius: 12px
 }
 
@@ -2004,6 +2005,11 @@ body.bt main {
   line-height: 1;
   white-space: nowrap;
   text-align: center
+}
+
+.bt-big small {
+  font-size: 14px;
+  font-weight: 400;
 }
 
 
