@@ -21,7 +21,7 @@
   <meta property="og:type" content="website">
   <meta property="og:image" content="icons/brilliant.png">
 
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=6">
   <!-- Image protection: no drag / save / long-press-save on images -->
   <style>
     img,
@@ -39,19 +39,90 @@
 
 <body class="sk-on">
   <div id="pgLoad" style="--p:0">
-    <div class="ldpuz" role="img" aria-label="Chess puzzle animation: rook ladder checkmate in 2">
-      <div class="ldboard">
-        <i class="lp wr1">&#9820;&#xFE0E;</i>
-        <i class="lp wr2">&#9820;&#xFE0E;</i>
-        <i class="lp bk">&#9818;&#xFE0E;</i>
-        <em class="lmate">#</em>
-      </div>
-      <div class="ldmoves"><span>1. Ra7+</span><span>1&hellip; Kh8</span><span>2. Rb8#</span></div>
+    <div class="ldpuz" role="img" aria-label="Animated chess puzzles: checkmate in 2">
+      <div class="ldboard" id="ldBoard"><em class="lmate">#</em></div>
+      <div class="ldmoves"><span id="ldMv"></span></div>
     </div>
-    <div class="ldtitle">Mate in 2</div>
+    <div class="ldtitle" id="ldName">Mate in 2</div>
     <div class="ldtrack"><i></i></div>
     <span class="ldtxt">Loading ChessPuzzle4U&hellip; <b class="ldpct">0%</b></span>
   </div>
+  <script>
+    /* Loader: plays verified mate-in-2 puzzles one after another until the page is ready.
+       To add a pattern, append an object to PZ: pcs = [colour, piece, square], mv = [from, to, label], mate = mated king's square. */
+    (function () {
+      var L = document.getElementById('pgLoad'), B = document.getElementById('ldBoard'),
+        MV = document.getElementById('ldMv'), NM = document.getElementById('ldName');
+      if (!L || !B) return;
+      var G = { K: '\u265A', Q: '\u265B', R: '\u265C', B: '\u265D', N: '\u265E', P: '\u265F' };
+      var PZ = [
+        { name: 'Rook ladder', mate: 'h8',
+          pcs: [['w', 'K', 'h1'], ['w', 'R', 'a1'], ['w', 'R', 'b2'], ['b', 'K', 'g8']],
+          mv: [['a1', 'a7', '1. Ra7'], ['g8', 'h8', '1\u2026 Kh8'], ['b2', 'b8', '2. Rb8#']] },
+        { name: 'Back-rank sacrifice', mate: 'g8',
+          pcs: [['w', 'Q', 'a4'], ['w', 'R', 'e1'], ['w', 'K', 'g1'], ['w', 'P', 'f2'], ['w', 'P', 'g2'], ['w', 'P', 'h2'],
+          ['b', 'R', 'c8'], ['b', 'K', 'g8'], ['b', 'P', 'f7'], ['b', 'P', 'g7'], ['b', 'P', 'h7']],
+          mv: [['a4', 'e8', '1. Qe8+'], ['c8', 'e8', '1\u2026 Rxe8'], ['e1', 'e8', '2. Rxe8#']] },
+        { name: 'Smothered mate', mate: 'h8',
+          pcs: [['w', 'N', 'e5'], ['w', 'Q', 'd5'], ['w', 'B', 'b3'], ['w', 'K', 'g1'], ['w', 'P', 'f2'], ['w', 'P', 'g2'], ['w', 'P', 'h2'],
+          ['b', 'K', 'h8'], ['b', 'R', 'f8'], ['b', 'P', 'g7'], ['b', 'P', 'h7']],
+          mv: [['d5', 'g8', '1. Qg8+'], ['f8', 'g8', '1\u2026 Rxg8'], ['e5', 'f7', '2. Nf7#']] }
+      ];
+      /* Use the board + colour theme the player picked (saved by applyBoard() in app.js) */
+      function mix(hex, t) { var n = parseInt(hex.slice(1), 16), r = n >> 16 & 255, g = n >> 8 & 255, b = n & 255;
+        return 'rgb(' + [r, g, b].map(function (v) { return Math.round(v + (255 - v) * t); }).join(',') + ')'; }
+      window.cpLd = function (o) {
+        var rs = document.documentElement.style, l = o.l, d = o.d;
+        if (!l || !d) { d = o.a || '#769656'; l = mix(d, .72); }          // texture boards: accent colours until the picture arrives
+        rs.setProperty('--l', l); rs.setProperty('--d', d);
+        if (o.th) for (var k in o.th) if (o.th[k]) rs.setProperty(k, o.th[k]);
+        if (o.img) {
+          var im = new Image();
+          im.onload = function () { B.style.backgroundImage = 'url(' + o.img + ')'; B.classList.add('img'); };
+          im.src = o.img;
+        } else { B.style.backgroundImage = ''; B.classList.remove('img'); }
+      };
+      var saved = null;
+      try { saved = JSON.parse(localStorage.cp4uLd || 'null'); } catch (e) { }
+      if (saved && saved.k === (localStorage.cp4uBoard || 'aquamarine')) window.cpLd(saved);
+      else window.cpLd({ k: 'aquamarine', l: '#eaf3ef', d: '#6dbea4' });   // first visit = the default board
+      var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+      var alive = function () { return L.isConnected; };
+      var cx = function (s) { return s.charCodeAt(0) - 97; }, cy = function (s) { return 8 - +s[1]; };
+      function put(el, s) { el.style.transform = 'translate(calc(var(--cell) * ' + cx(s) + '), calc(var(--cell) * ' + cy(s) + '))'; }
+      async function play(z, i) {
+        var at = {}, els = [];
+        NM.textContent = 'Mate in 2 \u00B7 ' + z.name;
+        B.classList.remove('mated', 'out'); MV.textContent = ''; MV.className = '';
+        B.style.setProperty('--mx', cx(z.mate)); B.style.setProperty('--my', cy(z.mate));
+        z.pcs.forEach(function (p) {
+          var el = document.createElement('i'); el.className = 'lp ' + p[0]; el.textContent = G[p[1]] + '\uFE0E';
+          put(el, p[2]); B.appendChild(el); at[p[2]] = el; els.push(el);
+        });
+        void B.offsetWidth; els.forEach(function (el) { el.classList.add('in'); });
+        if (still) {                                              // reduced motion: just show the final position
+          z.mv.forEach(function (m) { var t = at[m[1]]; if (t) t.remove(); var el = at[m[0]]; delete at[m[0]]; at[m[1]] = el; put(el, m[1]); });
+          MV.textContent = z.mv[z.mv.length - 1][2]; MV.className = 'mate'; B.classList.add('mated'); return;
+        }
+        await sleep(1000);
+        for (var k = 0; k < z.mv.length && alive(); k++) {
+          var m = z.mv[k], el = at[m[0]], tgt = at[m[1]];
+          MV.textContent = m[2]; MV.className = k === z.mv.length - 1 ? 'mate' : '';
+          if (tgt) tgt.classList.add('cap');                      // captured piece fades away
+          delete at[m[0]]; at[m[1]] = el; put(el, m[1]);
+          await sleep(1300);
+        }
+        if (!alive()) return;
+        B.classList.add('mated'); await sleep(2300);
+        B.classList.add('out'); await sleep(500);
+        els.forEach(function (el) { el.remove(); });
+      }
+      (async function () {
+        for (var i = 0; alive(); i = (i + 1) % PZ.length) { await play(PZ[i], i); if (still) return; }
+      })();
+    })();
+  </script>
   <header>
     <div class="brand"><img src="icons/brilliant.png" alt=""><b>ChessPuzzle<span>4U</span></b></div>
     <div class="stats">
@@ -213,7 +284,7 @@
     })();
   </script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
-  <script type="module" src="app.js?v=2"></script>
+  <script type="module" src="app.js?v=3"></script>
 </body>
 
 </html>
