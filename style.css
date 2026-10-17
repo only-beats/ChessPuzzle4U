@@ -216,6 +216,27 @@ button.ghost {
   background-repeat: no-repeat
 }
 
+#btnSet .cog {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+header #btnSet {
+  border: none;
+  background: none;
+  padding: 0;
+  margin-left: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+header #btnSet .cog {
+  width: 24px;
+  height: 24px;
+}
+
 .sq {
   position: relative;
   min-width: 0;
@@ -2219,4 +2240,83 @@ body.bt main {
     width: 18px !important;
     height: 18px !important;
   }
+}
+
+/* streak: clickable 🔥 + number, and the notification (toast) it shows */
+#stStreak {
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent
+}
+
+#toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 50px);
+  left: 50%;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: max-content;
+  max-width: min(92vw, 380px);
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--t);
+  border: 1px solid var(--line);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -30px);
+  transition: transform .3s ease, opacity .3s ease
+}
+
+#toast.show {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0)
+}
+
+#toast .ti {
+  width: 28px;
+  height: 28px;
+  flex: none
+}
+
+header #stStreak {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--t);
+}
+
+header #stStreak .sti {
+  width: 22px;
+  height: 22px;
+}
+
+body.bt header #stStreak {
+  display: none;
+  /* hidden in battle mode, like before */
+}
+
+#toast div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0
+}
+
+#toast b {
+  font-size: 14px
+}
+
+#toast span {
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--m);
+  white-space: normal
 }
