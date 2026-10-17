@@ -37,31 +37,34 @@ function rebuild() {                                                       // me
   puzzles = [...m.values()].sort((x, y) => x.id - y.id); setupElo();
 }
 async function loadFilePuzzles() {
-  const want = wantId;
-  try {
-    const res = await fetch(PUZ_FILE + '?v=' + PUZ_VER);
-    if (!res.ok) { msg('puzzles-lichess.js not found (HTTP ' + res.status + ')', 'err'); return; }
-    const txt = await res.text();
-    const rows = JSON.parse(txt.slice(txt.indexOf('['), txt.lastIndexOf(']') + 1));
-    fileList = [];
-    for (const p of rows) {
-      if (!p || !p.fen || !p.lichess) continue;
-      const mate = /\d/.exec(p.category || ''), side = String(p.fen).split(' ')[1] === 'b' ? 'Black' : 'White';
-      fileList.push({
-        result: '', date: 'Rating ' + (p.rating || ''), category: 'Tactic',
-        description: `${side} to move${mate ? ' and mate in ' + mate[0] : ' – find the best moves'}.`,
-        ...p, id: +p.id, white: 'Unknown', black: 'Unknown'
-      });
-    }
-    rebuild(); renderList();
-    if (want && (!cur || cur.id !== want) && !step) { const w = puzzles.find(x => x.id === want); if (w) open(w); }
-    if ($('#qSearch').value.trim()) runSearch();
-  } catch (e) { msg('Could not load puzzles-lichess.js: ' + e.message, 'err'); console.warn(e); }
+  const want = wantId, seenL = new Set(); fileList = [];
+  for (const file of PUZ_FILES) {
+    try {
+      const res = await fetch(file + '?v=' + PUZ_VER);
+      if (!res.ok) { if (file === PUZ_FILES[0]) msg(file.slice(2) + ' not found (HTTP ' + res.status + ')', 'err'); continue; }   // extra files are optional
+      const txt = await res.text();
+      const rows = JSON.parse(txt.slice(txt.indexOf('['), txt.lastIndexOf(']') + 1));
+      for (const p of rows) {
+        if (!p || !p.fen || !p.lichess || seenL.has(p.lichess)) continue;
+        seenL.add(p.lichess);
+        const mate = /\d/.exec(p.category || ''), side = String(p.fen).split(' ')[1] === 'b' ? 'Black' : 'White';
+        fileList.push({
+          result: '', date: 'Rating ' + (p.rating || ''), category: 'Tactic',
+          description: `${side} to move${mate ? ' and mate in ' + mate[0] : ' – find the best moves'}.`,
+          ...p, id: +p.id, white: 'Unknown', black: 'Unknown'
+        });
+      }
+      rebuild(); renderList();
+    } catch (e) { msg('Could not load ' + file.slice(2) + ': ' + e.message, 'err'); console.warn(e); }
+  }
+  if (want && (!cur || cur.id !== want) && !step) { const w = puzzles.find(x => x.id === want); if (w) open(w); }
+  if ($('#qSearch').value.trim()) runSearch();
 }
 const PER = 5;                                                           // puzzles shown per page in the list
 const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 const PUZ_FILE = './puzzles-lichess.js';
-const PUZ_VER = 3;   // change to 3, 4 ... each time you upload a new puzzles-lichess.js
+const PUZ_FILES = [PUZ_FILE, './puzzles-lichess1.js', './puzzles-lichess2.js', './puzzles-lichess3.js'];
+const PUZ_VER = 4;   // change to 3, 4 ... each time you upload a new puzzles-lichess.js
 const FB = !String(firebaseConfig.apiKey).startsWith('PASTE');
 let puzzles = [...SEED], db = null, auth = null, F = {}, isAdmin = false, catK = 0;
 let BT = null, cur, game, sol, alt, tree, node, autoT, page = 0, promoMove = null, step = 0, user, flip, last, sel, targets = [], wrong, busy, done, hintLvl, fbSq, fbIcon, log = [];
@@ -710,7 +713,7 @@ async function makeLichessFile(f, onProgress) {
     // 3) convert (ids of puzzles you already have are kept, new ones continue after the highest id)
     const have = lichessIds(), list = []; let id = nextId();
     for (let i = 0; i < lines.length; i++) {
-      const p = lichessRow(lines[i], have, () => id++); if (p) list.push(p);
+      if (have.has(lines[i].slice(0, lines[i].indexOf(',')))) continue; const p = lichessRow(lines[i], have, () => id++); if (p) list.push(p);
       if (i % 500 === 499) { tell(`Converting… ${(i + 1).toLocaleString()} / ${lines.length.toLocaleString()} puzzles – keep this tab open`); await new Promise(r => setTimeout(r)); }
     }
     if (!list.length) throw Error('No puzzles could be converted.');
