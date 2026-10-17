@@ -2320,3 +2320,93 @@ body.bt header #stStreak {
   color: var(--m);
   white-space: normal
 }
+
+/* streak animations: tada (paused flame loops, new streak plays once) + the flying flame */
+@keyframes tada {
+  0% {
+    transform: scale(1)
+  }
+
+  10%,
+  20% {
+    transform: scale(.85) rotate(-6deg)
+  }
+
+  30%,
+  50%,
+  70%,
+  90% {
+    transform: scale(1.25) rotate(6deg)
+  }
+
+  40%,
+  60%,
+  80% {
+    transform: scale(1.25) rotate(-6deg)
+  }
+
+  100% {
+    transform: scale(1) rotate(0)
+  }
+}
+
+@keyframes tadaLoop {
+  0% {
+    transform: scale(1)
+  }
+
+  3%,
+  6% {
+    transform: scale(.85) rotate(-6deg)
+  }
+
+  9%,
+  15%,
+  21%,
+  27% {
+    transform: scale(1.25) rotate(6deg)
+  }
+
+  12%,
+  18%,
+  24% {
+    transform: scale(1.25) rotate(-6deg)
+  }
+
+  30%,
+  100% {
+    transform: scale(1) rotate(0)
+  }
+}
+
+header #stStreak .sti.tada-loop {
+  animation: tadaLoop 3.5s ease-in-out infinite;
+  /* tada, rest, tada, rest ... */
+  transform-origin: 50% 60%
+}
+
+header #stStreak .sti.tada-once {
+  animation: tada .9s ease both;
+  transform-origin: 50% 60%
+}
+
+.fly {
+  position: fixed;
+  z-index: 10000;
+  pointer-events: none;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 0 8px rgba(255, 140, 50, .8))
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  header #stStreak .sti.tada-loop,
+  header #stStreak .sti.tada-once {
+    animation: none
+  }
+}
+
+header #stStreak .sti.tada-once {
+  animation: tada .9s ease both;
+  /* change .9s */
+}
