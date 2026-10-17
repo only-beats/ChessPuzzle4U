@@ -42,7 +42,8 @@ function isGoodMate(p) {
   return !L || Math.ceil(L / 2) === n;
 }
 function rebuild() {                                                       // merge both sources (Firebase wins when the same id exists in both)
-  const m = new Map(); fileList.forEach(p => m.set(p.id, p)); fbList.forEach(p => m.set(p.id, p));
+  const m = new Map(), codes = new Set(fileList.map(p => p.lichess)); fileList.forEach(p => m.set(p.id, p));
+  fbList.forEach(p => { if (!(p.lichess && codes.has(p.lichess))) m.set(p.id, p); });   // a Firebase copy of a Lichess puzzle that is in the file is ignored (the file is the master, old Firebase ids no longer match)
   puzzles = [...m.values()].filter(isGoodMate).sort((x, y) => x.id - y.id); setupElo();      // wrong / mate-in-6+ puzzles never show up
 }
 const pagerMid = (ci, n) => `<span>${ci >= 0 ? ci + 1 : '–'} / ${n}</span>`;
@@ -90,12 +91,13 @@ const PER = 5;                                                           // puzz
 const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 const PUZ_FILE = './puzzles-lichess.js';
 const PUZ_FILES = [PUZ_FILE, './puzzles-lichess1.js', './puzzles-lichess2.js', './puzzles-lichess3.js'];
-const PUZ_VER = 5;   // change to 3, 4 ... each time you upload a new puzzles-lichess.js
+const PUZ_VER = 6;   // change to 3, 4 ... each time you upload a new puzzles-lichess.js
 const FB = !String(firebaseConfig.apiKey).startsWith('PASTE');
 let puzzles = [...SEED], db = null, auth = null, F = {}, isAdmin = false, catK = 0;
 let BT = null, cur, game, sol, alt, tree, node, autoT, page = 0, promoMove = null, step = 0, user, flip, last, sel, targets = [], wrong, busy, done, hintLvl, fbSq, fbIcon, log = [];
 let wantId = +location.hash.slice(1) || +localStorage.cp4uLast;
 let prog = JSON.parse(localStorage.cp4u || '{"s":[],"streak":0,"day":""}');
+if (localStorage.cp4uIdSeq !== '2') { prog.s = []; localStorage.cp4uIdSeq = '2'; localStorage.removeItem('cp4uLast'); localStorage.cp4u = JSON.stringify(prog); }   // puzzle ids were renumbered once: old "solved" ticks would point at other puzzles (streak is kept)
 if (!prog.day) prog.streak = 0;                                            // old data had a "puzzles in a row" count: the daily streak starts fresh
 const saveProg = () => { localStorage.cp4u = JSON.stringify(prog); stats(); };
 
