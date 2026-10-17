@@ -57,7 +57,14 @@ export function initBattle(api) {
     }
 
     /* ---------- dialog ---------- */
-    function ratings() { const r = getPuzzles().map(p => p.rating).filter(x => typeof x === 'number'); return r.length ? [Math.min(...r), Math.max(...r)] : [400, 3000]; }
+   function ratings() {
+    let lo = Infinity, hi = -Infinity;
+    for (const p of getPuzzles()) {
+        const r = p.rating;
+        if (typeof r === 'number') { if (r < lo) lo = r; if (r > hi) hi = r; }
+    }
+    return lo <= hi ? [lo, hi] : [400, 3000];
+}
     const avPick = () => '<div class="setlbl">Avatar</div><div class="bt-avs">' +
         AVATARS.map(a => `<button type="button" class="bt-av ${sel.av === a ? 'on' : ''}" data-av="${a}" title="${a}">${avImg(a)}</button>`).join('') + '</div>';
     function view() {
