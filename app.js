@@ -857,6 +857,10 @@ function applyBoard() {
   } else colors(b.l, b.d);
   applyTheme(b.a || b.d);
   $('#curBoard').textContent = b.n;
+  const th = {};['--bg', '--card', '--glow', '--hl', '--g', '--g1', '--g2'].forEach(k => th[k] = root.getPropertyValue(k));
+  const ld = { k: b.k, l: b.l || '', d: b.d || '', a: b.a || '', img: b.img ? `${CC}/boards/${b.img}/150.png` : '', th };   // loader (index.html) reads this on the next visit
+  try { localStorage.cp4uLd = JSON.stringify(ld); } catch { }
+  if (window.cpLd) window.cpLd(ld);                                                                                  // and updates live if the loader is still showing
 }
 function renderSettings() {
   $('#boardOpts').innerHTML = BOARDS.map(b => `<button type="button" class="opt ${b.k === cfg.board ? 'on' : ''}" data-b="${b.k}" title="${b.n}">${b.img ? `<img src="${CC}/boards/_previews_/square/${b.img}.png" alt="${b.n}">` : `<i style="background:conic-gradient(${b.l} 25%,${b.d} 0 50%,${b.l} 0 75%,${b.d} 0)"></i>`}</button>`).join('');
