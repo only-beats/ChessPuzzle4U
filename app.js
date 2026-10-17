@@ -37,14 +37,12 @@ function rebuild() {                                                       // me
   const m = new Map(); fileList.forEach(p => m.set(p.id, p)); fbList.forEach(p => m.set(p.id, p));
   puzzles = [...m.values()].sort((x, y) => x.id - y.id); setupElo();
 }
-const pagerMid = (ci, n) => loadPct >= 0
-  ? `<span class="ldbar" style="--p:${loadPct}"><b>${loadPct}%</b></span>`
-  : `<span>${ci >= 0 ? ci + 1 : '–'} / ${n}</span>`;
-function setLoad(p) {                                                  // update the bar without re-rendering the whole list
+const pagerMid = (ci, n) => `<span>${ci >= 0 ? ci + 1 : '–'} / ${n}</span>`;
+function setLoad(p) {                                                  // one loader for the page + the puzzle files
   loadPct = p;
-  const bar = document.querySelector('#pager .ldbar');
-  if (bar) { bar.style.setProperty('--p', p); bar.firstChild.textContent = p + '%'; }
-  else { const s = document.querySelector('#pager > span'); if (s) s.outerHTML = pagerMid(-1, 0); }
+  const l = document.getElementById('pgLoad'); if (!l) return;
+  if (p < 0) { l.classList.add('done'); setTimeout(() => l.remove(), 400); return; }
+  l.style.setProperty('--p', p); const t = l.querySelector('.ldpct'); if (t) t.textContent = p + '%';
 }
 async function fetchText(file, onPct) {                                // download with progress (0..1)
   const res = await fetch(file + '?v=' + PUZ_VER);
@@ -76,7 +74,7 @@ async function loadFilePuzzles() {
       upd(1); rebuild(); renderList();
     } catch (e) { msg('Could not load ' + file.slice(2) + ': ' + e.message, 'err'); console.warn(e); }
   }
-  loadPct = -1; rebuild(); renderList();
+  setLoad(100); rebuild(); renderList(); setTimeout(() => setLoad(-1), 250);
   if (want && (!cur || cur.id !== want) && !step) { const w = puzzles.find(x => x.id === want); if (w) open(w); }
   if ($('#qSearch').value.trim()) runSearch();
 }
