@@ -33,9 +33,17 @@ const PIECE = (c, t) => {
 const PIECE_PREVIEW = p => p.k === 'lichess' ? LICHESS('w', 'n') : `${CC}/pieces/${p.dir || p.k}/150/wn.png`;
 let fbList = [...SEED], fileList = [], fbIds = new Set(); // fbList = Firebase (or built-in) puzzles, fileList = Lichess puzzles from the GitHub file
 let loadPct = -1;
+// Only REAL "Mate in 1..5" puzzles are allowed. Label must be 1-5 and, when the move list is known, the real mate length must equal the label
+// (move list of a mate in N has 2N-1 moves). Puzzles with other categories (not "Mate in ...") are left alone.
+function isGoodMate(p) {
+  const m = /^Mate in (\d+)$/.exec(p.category || ''); if (!m) return true;
+  const n = +m[1]; if (n < 1 || n > 5) return false;
+  const L = Array.isArray(p.solution) ? p.solution.length : 0;
+  return !L || Math.ceil(L / 2) === n;
+}
 function rebuild() {                                                       // merge both sources (Firebase wins when the same id exists in both)
   const m = new Map(); fileList.forEach(p => m.set(p.id, p)); fbList.forEach(p => m.set(p.id, p));
-  puzzles = [...m.values()].sort((x, y) => x.id - y.id); setupElo();
+  puzzles = [...m.values()].filter(isGoodMate).sort((x, y) => x.id - y.id); setupElo();      // wrong / mate-in-6+ puzzles never show up
 }
 const pagerMid = (ci, n) => `<span>${ci >= 0 ? ci + 1 : '–'} / ${n}</span>`;
 function setLoad(p) {                                                  // one loader for the page + the puzzle files
@@ -62,7 +70,7 @@ async function loadFilePuzzles() {
       if (!res.ok) { if (fi === 0) msg(file.slice(2) + ' not found (HTTP ' + res.status + ')', 'err'); upd(1); continue; }   // extra files are optional
       const rows = JSON.parse(txt.slice(txt.indexOf('['), txt.lastIndexOf(']') + 1));
       for (const p of rows) {
-        if (!p || !p.fen || !p.lichess || seenL.has(p.lichess)) continue;
+        if (!p || !p.fen || !p.lichess || seenL.has(p.lichess) || !isGoodMate(p)) continue;
         seenL.add(p.lichess);
         const mate = /\d/.exec(p.category || ''), side = String(p.fen).split(' ')[1] === 'b' ? 'Black' : 'White';
         fileList.push({
@@ -82,7 +90,7 @@ const PER = 5;                                                           // puzz
 const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 const PUZ_FILE = './puzzles-lichess.js';
 const PUZ_FILES = [PUZ_FILE, './puzzles-lichess1.js', './puzzles-lichess2.js', './puzzles-lichess3.js'];
-const PUZ_VER = 4;   // change to 3, 4 ... each time you upload a new puzzles-lichess.js
+const PUZ_VER = 5;   // change to 3, 4 ... each time you upload a new puzzles-lichess.js
 const FB = !String(firebaseConfig.apiKey).startsWith('PASTE');
 let puzzles = [...SEED], db = null, auth = null, F = {}, isAdmin = false, catK = 0;
 let BT = null, cur, game, sol, alt, tree, node, autoT, page = 0, promoMove = null, step = 0, user, flip, last, sel, targets = [], wrong, busy, done, hintLvl, fbSq, fbIcon, log = [];
@@ -592,6 +600,7 @@ function lichessRow(line, have, takeId) {
   for (const u of m) { const x = g.move(uci(u)); if (!x) return null; sol.push(x.san); }
   if (!sol.length) return null;
   const mate = (themes.match(/mateIn(\d)/) || [])[1], side = start.split(' ')[1] === 'w' ? 'White' : 'Black';
+  if (mate && Math.ceil(sol.length / 2) !== +mate) return null;       // Lichess "mateIn5" = 5 or MORE -> skip the longer ones
   return {
     id: have.get(lid) ?? takeId(), date: 'Rating ' + rating, white: 'Unknown', black: 'Unknown', result: '', fen: start, solution: sol,
     category: mate ? 'Mate in ' + mate : 'Tactic',
@@ -659,6 +668,7 @@ async function removeIds(ids, label) {
 $('#dSel').onclick = () => removeIds([...picked], 'ticked ones');
 $('#dAll').onclick = () => { filtered().forEach(p => picked.add(p.id)); renderList(); delUi(); amsg(`Ticked ${picked.size} puzzle(s) in the current category.`, 'ok'); };
 $('#dNone').onclick = () => { picked.clear(); renderList(); delUi(); };
+if ($('#dBad')) $('#dBad').onclick = () => removeIds(fbList.filter(p => !isGoodMate(p)).map(p => p.id), 'wrong mate length / Mate in 6+');
 $('#dGo').onclick = () => {
   const k = +$('#dCat').value, src = $('#dSrc').value, n = Math.max(0, +$('#dNum').value || 0);
   let l = puzzles.filter(p => (!k || catOf(p) === k) && (src === 'all' || p.lichess)).sort((x, y) => y.id - x.id);
