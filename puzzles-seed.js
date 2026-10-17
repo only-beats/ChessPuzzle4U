@@ -1099,6 +1099,7 @@ export const SEED = [
     {
         id: 332, date: "?", white: "Unknown", black: "Unknown", result: "0-1", fen: "3r1k1r/1pN1bppp/2p3q1/8/Q3R3/7b/PPP2PPP/R1B2BK1 b - - 0 1", solution: ["Qxg2+", "Bxg2", "Rd1+", "Re1", "Rxe1+", "Bf1", "Rxf1#",], description: "Black moves and wins in 4.", category: "Mate in 4"
     },
+    { id: 333, date: "?", white: "Unknown", black: "Unknown", result: "1-0", fen: "8/1p6/2pkp2Q/1p6/1n1P2B1/4P1P1/PP1q1PP1/1KR5 b - - 0 1", solution: ["Qd3+", "Ka1", "Nc2+", "Kb1", "Na3+", "Ka1", "Qb1+", "Rxb1", "Nc2#"], description: "Black moves and wins in 5.", category: "Mate in 5" },
 
 
 
