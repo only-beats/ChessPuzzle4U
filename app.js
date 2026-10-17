@@ -31,18 +31,37 @@ const PIECE = (c, t) => {
   return p.k === 'lichess' ? LICHESS(c, t) : `${CC}/pieces/${p.dir || p.k}/150/${c}${t}.png`;
 };
 const PIECE_PREVIEW = p => p.k === 'lichess' ? LICHESS('w', 'n') : `${CC}/pieces/${p.dir || p.k}/150/wn.png`;
-let fbList = [...SEED], fileList = [], fbIds = new Set();                  // fbList = Firebase (or built-in) puzzles, fileList = Lichess puzzles from the GitHub file
+let fbList = [...SEED], fileList = [], fbIds = new Set(); // fbList = Firebase (or built-in) puzzles, fileList = Lichess puzzles from the GitHub file
+let loadPct = -1;
 function rebuild() {                                                       // merge both sources (Firebase wins when the same id exists in both)
   const m = new Map(); fileList.forEach(p => m.set(p.id, p)); fbList.forEach(p => m.set(p.id, p));
   puzzles = [...m.values()].sort((x, y) => x.id - y.id); setupElo();
 }
+const pagerMid = (ci, n) => loadPct >= 0
+  ? `<span class="ldbar" style="--p:${loadPct}"><b>${loadPct}%</b></span>`
+  : `<span>${ci >= 0 ? ci + 1 : '–'} / ${n}</span>`;
+function setLoad(p) {                                                  // update the bar without re-rendering the whole list
+  loadPct = p;
+  const bar = document.querySelector('#pager .ldbar');
+  if (bar) { bar.style.setProperty('--p', p); bar.firstChild.textContent = p + '%'; }
+  else { const s = document.querySelector('#pager > span'); if (s) s.outerHTML = pagerMid(-1, 0); }
+}
+async function fetchText(file, onPct) {                                // download with progress (0..1)
+  const res = await fetch(file + '?v=' + PUZ_VER);
+  if (!res.ok) return { res };
+  const total = +res.headers.get('content-length') || 0;
+  if (!res.body || !total) { const text = await res.text(); onPct(1); return { res, text }; }
+  const rd = res.body.getReader(), dec = new TextDecoder(); let got = 0, text = '';
+  for (; ;) { const { done, value } = await rd.read(); if (done) break; got += value.length; text += dec.decode(value, { stream: true }); onPct(Math.min(got / total, 0.98)); }
+  return { res, text: text + dec.decode() };
+}
 async function loadFilePuzzles() {
-  const want = wantId, seenL = new Set(); fileList = [];
-  for (const file of PUZ_FILES) {
+  const want = wantId, seenL = new Set(), nF = PUZ_FILES.length; fileList = []; setLoad(0);
+  for (let fi = 0; fi < nF; fi++) {
+    const file = PUZ_FILES[fi], upd = f => setLoad(Math.min(99, Math.floor((fi + f) / nF * 100)));
     try {
-      const res = await fetch(file + '?v=' + PUZ_VER);
-      if (!res.ok) { if (file === PUZ_FILES[0]) msg(file.slice(2) + ' not found (HTTP ' + res.status + ')', 'err'); continue; }   // extra files are optional
-      const txt = await res.text();
+      const { res, text: txt } = await fetchText(file, upd);
+      if (!res.ok) { if (fi === 0) msg(file.slice(2) + ' not found (HTTP ' + res.status + ')', 'err'); upd(1); continue; }   // extra files are optional
       const rows = JSON.parse(txt.slice(txt.indexOf('['), txt.lastIndexOf(']') + 1));
       for (const p of rows) {
         if (!p || !p.fen || !p.lichess || seenL.has(p.lichess)) continue;
@@ -54,9 +73,10 @@ async function loadFilePuzzles() {
           ...p, id: +p.id, white: 'Unknown', black: 'Unknown'
         });
       }
-      rebuild(); renderList();
+      upd(1); rebuild(); renderList();
     } catch (e) { msg('Could not load ' + file.slice(2) + ': ' + e.message, 'err'); console.warn(e); }
   }
+  loadPct = -1; rebuild(); renderList();
   if (want && (!cur || cur.id !== want) && !step) { const w = puzzles.find(x => x.id === want); if (w) open(w); }
   if ($('#qSearch').value.trim()) runSearch();
 }
@@ -487,7 +507,7 @@ function renderList() {
   $('#list').innerHTML = all.slice(page * PER, page * PER + PER).map(p => `<div class="pcard ${cur && cur.id === p.id ? 'on' : ''}" data-id="${p.id}"><div><b>#${p.id} · ${esc(p.category || '')}</b><br><small>${esc(p.white)} vs ${esc(p.black)} · ${esc(p.date || '')}</small></div>
     <div>${prog.s.includes(p.id) ? '<span class="tick">✔</span>' : ''}${isAdmin ? `<span class="adm"><input type="checkbox" data-s="${p.id}" ${picked.has(p.id) ? 'checked' : ''}><button data-e="${p.id}">✎</button><button data-x="${p.id}">✕</button></span>` : ''}</div></div>`).join('') || `<p class="mut">${minElo || maxElo ? 'No puzzles with ' + eloText() + ' in this category.' : 'No puzzles yet.'}</p>`;
   const ci = cur ? all.findIndex(p => p.id === cur.id) : -1;
-  $('#pager').innerHTML = `<button data-nav="-1" ${ci > 0 ? '' : 'disabled'}>‹ Prev</button><span>${ci >= 0 ? ci + 1 : '–'} / ${all.length}</span><button data-nav="1" ${ci < all.length - 1 ? '' : 'disabled'}>Next ›</button>`;
+  $('#pager').innerHTML = `<button data-nav="-1" ${ci > 0 ? '' : 'disabled'}>‹ Prev</button>${pagerMid(ci, all.length)}<button data-nav="1" ${ci < all.length - 1 ? '' : 'disabled'}>Next ›</button>`;
 }
 $('#pager').onclick = e => {
   const b = e.target.closest('[data-nav]'); if (!b) return;
