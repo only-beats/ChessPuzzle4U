@@ -2416,3 +2416,30 @@ header #stStreak .sti.tada-once {
   animation: tada .9s ease both;
   /* change .9s */
 }
+
+
+.ldbar {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: conic-gradient(var(--g1) calc(var(--p) * 1%), var(--line) 0);
+  display: grid;
+  place-items: center;
+  transition: background .25s
+}
+
+.ldbar::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: var(--card)
+}
+
+.ldbar b {
+  position: relative;
+  font-size: 10px;
+  color: var(--t)
+}
