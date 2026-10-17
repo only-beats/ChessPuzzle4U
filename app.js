@@ -198,6 +198,18 @@ function sacVoice(mv) {
   // 3) quiet capture of a smaller piece that cannot be recaptured (Bxg2) -> still a sacrifice
   return mv.captured && worth ? 'brilliant-' + PNAME[mv.piece] : '';
 }
+// for the 2nd, 3rd... move of the puzzle: is the move just played a REAL sacrifice?
+// = the opponent can capture that piece and the exchange costs us 2+ points (unprotected piece = we lose the whole piece)
+function realSac(mv) {
+  if (mv.piece === 'k' || mv.promotion || game.in_checkmate()) return false;
+  const taken = mv.captured ? VAL[mv.captured] : 0;
+  return game.moves({ verbose: true }).filter(o => o.to === mv.to && o.captured).some(o => {
+    game.move({ from: o.from, to: o.to, promotion: o.promotion });                       // opponent takes the piece...
+    const protectedPiece = game.moves({ verbose: true }).some(r => r.to === mv.to && r.captured);   // ...can we take back?
+    game.undo();
+    return taken + (protectedPiece ? VAL[o.piece] : 0) - VAL[mv.piece] <= -2;
+  });
+}
 const voiceText = v => {
   const p = v.split('-');
   if (p[1] === 'promotion') return 'What a brilliant ' + p[2] + ' promotion!';
@@ -292,7 +304,7 @@ function tryMove(from, to, promo = 'q') {
   const kid = tree ? kidFor(mv) : null;
   const good = (tree ? !!kid : accepted().includes(norm(mv.san))) || game.in_checkmate();
   if (good) {
-    const brilliant = step === 0 || /!!/.test(tree ? (kid ? kid.raw : '') : (sol[step] || ''));   // first move (or any "!!" move)
+    const brilliant = step === 0 || /!!/.test(tree ? (kid ? kid.raw : '') : (sol[step] || '')) || realSac(mv);   // first move, any "!!" move, or a real sacrifice on any later move
     last = mv; step++; log.push(mv.san); fbSq = mv.to; fbIcon = brilliant ? 'brilliant' : 'best';
     if (tree) node = kid || { san: norm(mv.san), raw: mv.san, kids: [] };
     moveSound(mv, true);                                                  // promote.mp3 already played when the dialog opened
