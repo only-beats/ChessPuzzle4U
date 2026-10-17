@@ -2443,3 +2443,397 @@ header #stStreak .sti.tada-once {
   font-size: 10px;
   color: var(--t)
 }
+
+/* ===== page loader: animated mate-in-2 (rook ladder) =====
+   Board is 8x8. Piece positions are (file, row) cells, row 0 = rank 8.
+   Loop = 7s:  Ra1-a7+  ->  Kg8-h8  ->  Rb2-b8#  ->  flash mate  ->  reset */
+#pgLoad {
+  --cell: 30px;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: var(--bg);
+  color: var(--m);
+  font-size: 14px;
+  transition: opacity .35s
+}
+
+#pgLoad.done {
+  opacity: 0;
+  pointer-events: none
+}
+
+.ldpuz {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px
+}
+
+.ldboard {
+  position: relative;
+  width: calc(var(--cell) * 8);
+  height: calc(var(--cell) * 8);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .55), 0 0 0 3px var(--card);
+  background:
+    conic-gradient(var(--d) 25%, var(--l) 0 50%, var(--d) 0 75%, var(--l) 0) 0 0 / calc(var(--cell) * 2) calc(var(--cell) * 2)
+}
+
+.lp {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: var(--cell);
+  height: var(--cell);
+  display: grid;
+  place-items: center;
+  font-style: normal;
+  font-size: calc(var(--cell) * .86);
+  line-height: 1;
+  font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", "DejaVu Sans", sans-serif;
+  will-change: transform, opacity;
+  animation-duration: 7s;
+  animation-iteration-count: infinite;
+  animation-timing-function: cubic-bezier(.5, 0, .2, 1)
+}
+
+.lp.wr1,
+.lp.wr2 {
+  color: #fff;
+  text-shadow: 0 0 2px #000, 0 0 2px #000, 0 1px 3px #000
+}
+
+.lp.bk {
+  color: #111;
+  text-shadow: 0 0 1px #fff, 0 0 3px rgba(255, 255, 255, .55)
+}
+
+/* white rook #1: a1 -> a7 (check) */
+.wr1 {
+  animation-name: ldR1
+}
+
+@keyframes ldR1 {
+  0% {
+    transform: translate(0, calc(var(--cell) * 7));
+    opacity: 0
+  }
+
+  2%,
+  12% {
+    transform: translate(0, calc(var(--cell) * 7));
+    opacity: 1
+  }
+
+  24%,
+  93% {
+    transform: translate(0, var(--cell));
+    opacity: 1
+  }
+
+  97%,
+  100% {
+    transform: translate(0, var(--cell));
+    opacity: 0
+  }
+}
+
+/* black king: g8 -> h8 */
+.bk {
+  animation-name: ldK
+}
+
+@keyframes ldK {
+  0% {
+    transform: translate(calc(var(--cell) * 6), 0);
+    opacity: 0
+  }
+
+  2%,
+  34% {
+    transform: translate(calc(var(--cell) * 6), 0);
+    opacity: 1
+  }
+
+  44%,
+  93% {
+    transform: translate(calc(var(--cell) * 7), 0);
+    opacity: 1
+  }
+
+  97%,
+  100% {
+    transform: translate(calc(var(--cell) * 7), 0);
+    opacity: 0
+  }
+}
+
+/* white rook #2: b2 -> b8 (mate) */
+.wr2 {
+  animation-name: ldR2
+}
+
+@keyframes ldR2 {
+  0% {
+    transform: translate(var(--cell), calc(var(--cell) * 6));
+    opacity: 0
+  }
+
+  2%,
+  56% {
+    transform: translate(var(--cell), calc(var(--cell) * 6));
+    opacity: 1
+  }
+
+  66%,
+  93% {
+    transform: translate(var(--cell), 0);
+    opacity: 1
+  }
+
+  97%,
+  100% {
+    transform: translate(var(--cell), 0);
+    opacity: 0
+  }
+}
+
+/* checkmate badge: small red circle on the corner of the king's square (h8) */
+.lmate {
+  position: absolute;
+  left: calc(var(--cell) * 8 - var(--cell) * .42);
+  top: 0;
+  width: calc(var(--cell) * .42);
+  height: calc(var(--cell) * .42);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  font: 800 calc(var(--cell) * .3)/1 system-ui, sans-serif;
+  font-style: normal;
+  color: #fff;
+  background: #d93a2f;
+  box-shadow: 0 0 0 1.5px #fff;
+  opacity: 0;
+  transform: scale(.4);
+  animation: ldMate 7s infinite
+}
+
+/* red tint on the mated king's square */
+.ldboard::after {
+  content: "";
+  position: absolute;
+  left: calc(var(--cell) * 7);
+  top: 0;
+  width: var(--cell);
+  height: var(--cell);
+  background: rgba(217, 58, 47, .45);
+  opacity: 0;
+  animation: ldTint 7s infinite
+}
+
+@keyframes ldTint {
+
+  0%,
+  66% {
+    opacity: 0
+  }
+
+  72%,
+  90% {
+    opacity: 1
+  }
+
+  95%,
+  100% {
+    opacity: 0
+  }
+}
+
+@keyframes ldMate {
+
+  0%,
+  66% {
+    opacity: 0;
+    transform: scale(.4)
+  }
+
+  72% {
+    opacity: 1;
+    transform: scale(1.25)
+  }
+
+  78%,
+  90% {
+    opacity: 1;
+    transform: scale(1)
+  }
+
+  95%,
+  100% {
+    opacity: 0;
+    transform: scale(1)
+  }
+}
+
+/* move list under the board, one move at a time */
+.ldmoves {
+  position: relative;
+  height: 20px;
+  width: calc(var(--cell) * 8);
+  text-align: center;
+  font: 600 14px/20px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--t)
+}
+
+.ldmoves span {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: 7s infinite ldMv
+}
+
+.ldmoves span:nth-child(1) {
+  animation-name: ldMv1
+}
+
+.ldmoves span:nth-child(2) {
+  animation-name: ldMv2
+}
+
+.ldmoves span:nth-child(3) {
+  animation-name: ldMv3;
+  color: #ff6b5e
+}
+
+@keyframes ldMv1 {
+
+  0%,
+  12% {
+    opacity: 0
+  }
+
+  16%,
+  33% {
+    opacity: 1
+  }
+
+  37%,
+  100% {
+    opacity: 0
+  }
+}
+
+@keyframes ldMv2 {
+
+  0%,
+  35% {
+    opacity: 0
+  }
+
+  40%,
+  55% {
+    opacity: 1
+  }
+
+  59%,
+  100% {
+    opacity: 0
+  }
+}
+
+@keyframes ldMv3 {
+
+  0%,
+  58% {
+    opacity: 0
+  }
+
+  66%,
+  92% {
+    opacity: 1
+  }
+
+  96%,
+  100% {
+    opacity: 0
+  }
+}
+
+.ldtitle {
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  font-size: 13px;
+  color: var(--g1)
+}
+
+/* real progress bar (driven by --p from setLoad) */
+.ldtrack {
+  width: calc(var(--cell) * 8);
+  height: 6px;
+  border-radius: 99px;
+  background: var(--line);
+  overflow: hidden
+}
+
+.ldtrack i {
+  display: block;
+  height: 100%;
+  width: calc(var(--p) * 1%);
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--g2), var(--g1));
+  transition: width .25s
+}
+
+.ldtxt b {
+  color: var(--t);
+  font-variant-numeric: tabular-nums;
+  margin-left: 4px
+}
+
+@media (max-width:380px) {
+  #pgLoad {
+    --cell: 26px
+  }
+}
+
+/* reduced motion: show the final mate position, no looping */
+@media (prefers-reduced-motion: reduce) {
+
+  .lp,
+  .lmate,
+  .ldmoves span {
+    animation: none !important
+  }
+
+  .wr1 {
+    transform: translate(0, var(--cell));
+    opacity: 1
+  }
+
+  .bk {
+    transform: translate(calc(var(--cell) * 7), 0);
+    opacity: 1
+  }
+
+  .wr2 {
+    transform: translate(var(--cell), 0);
+    opacity: 1
+  }
+
+  .lmate {
+    opacity: 1;
+    transform: none
+  }
+
+  .ldmoves span:nth-child(3) {
+    opacity: 1
+  }
+}
