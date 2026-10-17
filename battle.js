@@ -19,6 +19,7 @@ export function initBattle(api) {
     const sel = { time: 180, cat: 0, lo: null, hi: null, av: AVATARS.includes(localStorage.cp4uAv) ? localStorage.cp4uAv : AVATARS[0] };   // lo/hi null = whole rating range
     const now = () => Date.now() + offset;
     let tenDone = false, oppAgain = false, tenAudio = null;
+    let againT = null, againLeft = 15;
     const sfx = f => { if (localStorage.cp4uSound === '0') return null; try { const a = new Audio('Audio/' + f + '.mp3'); a.play().catch(() => { }); return a; } catch { return null; } };
     const stopTen = () => { if (tenAudio) { tenAudio.pause(); tenAudio = null; } };
     const R = p => F.ref(db, 'battles/' + room + (p ? '/' + p : ''));
@@ -57,14 +58,14 @@ export function initBattle(api) {
     }
 
     /* ---------- dialog ---------- */
-   function ratings() {
-    let lo = Infinity, hi = -Infinity;
-    for (const p of getPuzzles()) {
-        const r = p.rating;
-        if (typeof r === 'number') { if (r < lo) lo = r; if (r > hi) hi = r; }
+    function ratings() {
+        let lo = Infinity, hi = -Infinity;
+        for (const p of getPuzzles()) {
+            const r = p.rating;
+            if (typeof r === 'number') { if (r < lo) lo = r; if (r > hi) hi = r; }
+        }
+        return lo <= hi ? [lo, hi] : [400, 3000];
     }
-    return lo <= hi ? [lo, hi] : [400, 3000];
-}
     const avPick = () => '<div class="setlbl">Avatar</div><div class="bt-avs">' +
         AVATARS.map(a => `<button type="button" class="bt-av ${sel.av === a ? 'on' : ''}" data-av="${a}" title="${a}">${avImg(a)}</button>`).join('') + '</div>';
     function view() {
@@ -176,10 +177,10 @@ export function initBattle(api) {
         unsub = F.onValue(R(), s => { data = s.val(); if (!data) return reset('The room was closed.'); onData(); });
         presence();
     }
-    async function leave() {
+    async function leave(note) {
         const r = room; if (!r) return;
         if (disc) disc.cancel().catch(() => { });
-        reset();
+        reset(typeof note === 'string' ? note : undefined);
         try {
             await F.runTransaction(F.ref(db, 'battles/' + r), d => {
                 if (!d) return d;
@@ -189,6 +190,7 @@ export function initBattle(api) {
         } catch (e) { console.warn(e); }
     }
     function reset(note) {
+        clearInterval(againT); againT = null;
         if (unsub) unsub(); unsub = null; clearInterval(tick); tick = null;
         stopTen(); oppAgain = false; room = ''; data = null; my = null; started = over = false; lock = true; localStorage.removeItem(LS);
         document.body.classList.remove('bt'); api.setBT(null); $('#btHud').classList.add('hidden'); $('#btTime').classList.remove('low'); ov(''); window.dispatchEvent(new Event('resize'));
@@ -224,6 +226,7 @@ export function initBattle(api) {
         $('#btOp').innerHTML = o ? card(o, o.online) : '<i class="mut">opponent left</i>';
     }
     function play() {
+        clearInterval(againT); againT = null;
         closeDlg(); document.body.classList.add('bt'); api.setBT(BT); $('#btHud').classList.remove('hidden'); window.dispatchEvent(new Event('resize'));
         my = { ...data.players[uid] }; round = data.round || 0; tenDone = false; final = null; stopTen();
         tick = setInterval(loop, 250); loop();
@@ -273,6 +276,13 @@ export function initBattle(api) {
         }
     };
     function outScreen() { if (!over) ov('<div class="bt-big">Game over</div><div>You used all 3 lives. Your opponent is still playing…</div>'); }
+    function againTick() {
+        if (!data || data.status !== 'over') { clearInterval(againT); againT = null; return; }
+        againLeft--; const c = $('#btCnt'); if (c) c.textContent = Math.max(againLeft, 0);
+        if (againLeft > 0) return;
+        const o = others()[0], iAsked = !!(data && data.players && data.players[uid] && data.players[uid].again);
+        leave(iAsked ? (o ? o.name : 'Opponent') + ' denied to play again.' : 'Time is over – room closed.');
+    }
     function result() {
         const m = data.players[uid]; let o = others()[0], left = false;
         if (o) final = { ...o };                                                    // remember the opponent's final scores
@@ -280,14 +290,17 @@ export function initBattle(api) {
         let t, w = 0;                                                              // w: 1 = you won, -1 = opponent won, 0 = draw
         if (!o) { t = 'Opponent left<br>You Win!'; w = 1; }
         else if (m.solved !== o.solved) { w = m.solved > o.solved ? 1 : -1; t = w > 0 ? 'You win!' : 'You lose'; }
-        else if (m.lives !== o.lives) { w = m.lives > o.lives ? 1 : -1; t = w > 0 ? 'You win (fewer mistakes)' : 'You lose (more mistakes)'; }
+        else if (m.lives !== o.lives) { w = m.lives > o.lives ? 1 : -1; t = (w > 0 ? 'You win' : 'You lose') + '<br><small>' + (w > 0 ? '(fewer mistakes)' : '(more mistakes)') + '</small>'; }
         else t = 'Draw';
         if (left) t += '<br><small>Opponent left</small>';
         const row = (p, win) => `<div class="bt-rl ${win ? 'win' : ''}">${avImg(p.avatar, 'ava md')}<div class="who"><b class="nm">${esc(p.name)}</b><span class="sc">${LIVES - p.lives} wrong</span></div><b class="bt-pts">${p.solved}<small>solved</small></b></div>`;
         const again = o && !left ? `<button class="pri" id="btAgain" type="button" ${m.again ? 'disabled' : ''}>Play again</button>` : '';
-        const note = o && !left ? (m.again ? 'Waiting for ' + esc(o.name) + '…' : o.again ? esc(o.name) + ' wants to play again' : '') : '';
+        const asked = !!(o && !left && (m.again || o.again));
+        if (!asked) { clearInterval(againT); againT = null; }
+        else if (!againT) { againLeft = 15; againT = setInterval(againTick, 1000); }
+        const note = asked ? (m.again ? 'Waiting for ' + esc(o.name) : esc(o.name) + ' wants to play again') + '… <b id="btCnt">' + againLeft + '</b>s' : '';
         ov(`<div class="bt-big">${t}</div><div class="bt-res">${row(m, w > 0)}${o ? row(o, w < 0) : ''}</div>` +
-            `<div class="bt-acts">${again}<button id="btOvLeave" type="button">Leave room</button></div>` + (note ? `<div class="bt-note">${note}</div>` : ''));
+            `<div class="bt-acts">${again}<button id="btOvLeave" class="danger" type="button">Leave room</button></div>` + (note ? `<div class="bt-note">${note}</div>` : ''));
         const g = $('#btAgain'); if (g) g.onclick = () => F.set(R('players/' + uid + '/again'), true);
         const b = $('#btOvLeave'); if (b) b.onclick = leave;
     }
