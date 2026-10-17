@@ -2635,3 +2635,16 @@ header #stStreak .sti.tada-once {
     transition: none
   }
 }
+
+
+/* ===== no scrolling while the loader is showing ===== */
+html:has(#pgLoad),
+body:has(#pgLoad) {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+#pgLoad {
+  touch-action: none;
+  overscroll-behavior: contain;
+}
