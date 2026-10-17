@@ -1,954 +1,291 @@
-import { firebaseConfig, SOUNDS, CATS } from './config.js?v=3';
-import { SEED } from './puzzles-seed.js?v=3';
-import { initAnalysis } from './Analysis.js?v=3';
-import { initBattle } from './battle.js?v=3';
+<!doctype html>
+<html lang="en">
 
-const $ = s => document.querySelector(s);
-const norm = s => (s || '').replace(/[+#!?]/g, '');
-const CDN = 'https://www.gstatic.com/firebasejs/10.12.2';
-const LICHESS = (c, t) => `https://cdn.jsdelivr.net/gh/lichess-org/lila@master/public/piece/cburnett/${c}${t.toUpperCase()}.svg`;
-const CC = 'https://images.chesscomfiles.com/chess-themes';          // chess.com boards + pieces
-const PIECES = [
-  { k: 'neo', n: 'Neo' }, { k: 'game_room', n: 'Castle' }, { k: 'classic', n: 'Classic' }, { k: 'neo_wood', n: 'Neo Wood' },
-  { k: 'cases', n: 'Cases' }, { k: 'alpha', n: 'Alpha' }, { k: 'wood', n: 'Wood' }, { k: 'light', n: 'Light' }, { k: 'lichess', n: 'Lichess (cburnett)' }, { k: 'vintage', n: 'vintage' },
-  { k: 'tournament', n: 'Tournament' }, { k: 'luca', n: 'Luca' }, { k: 'club', n: 'Club' }, { k: 'staunton', n: '3D Staunton', dir: '3d_staunton' },
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>ChessPuzzle4U – Mate Puzzles</title>
 
-];
-const BOARDS = [
-  { k: 'aquamarine', n: 'Aquamarine', l: '#eaf3ef', d: '#6dbea4' },
-  { k: 'walnut', n: 'Walnut', img: 'walnut', a: '#7b5539' }, { k: 'newspaper', n: 'Newspaper', img: 'newspaper', a: '#8a8a86' }, { k: 'wood', n: 'Wood', img: 'dark_wood', a: '#6e4a2c' },
-  { k: 'marble', n: 'Marble', img: 'marble', a: '#6f6b66' }, { k: 'icy_sea', n: 'Icy Sea', img: 'icy_sea', a: '#7f9fc2' }, { k: 'stone', n: 'Stone', img: 'stone', a: '#4f4f4f' },
-  { k: 'bases', n: 'Bases', img: 'bases', a: '#c0703a' }, { k: 'dash', n: 'Dash', img: 'dash', a: '#5e3d2c' }, { k: 'checkers', n: 'Checkers', img: 'checkers', a: '#b0524f' },
-  { k: 'metal', n: 'Metal', img: 'metal', a: '#6a6a6a' }, { k: 'red', n: 'Red', img: 'red', a: '#b5594a' }, { k: 'classic', n: 'Classic', img: 'light', a: '#a9a9a9' },
-  { k: 'brown', n: 'Brown', l: '#edd6b0', d: '#b88762' }, { k: 'blue', n: 'Blue', l: '#dee3e6', d: '#8ca2ad' },
-  { k: 'green', n: 'Green', l: '#eeeed2', d: '#769656' }, { k: 'lavender', n: 'Lavender', l: '#efeff3', d: '#8476ba' }, { k: 'pink', n: 'Pink', l: '#fbe9ee', d: '#e49bb0' },
-  { k: 'sand', n: 'Sand', img: 'sand', a: '#b8a590' }
-];
-const BOTS = [{ k: 'jade', n: 'Jade', img: 'Bots/Jade.png' }, { k: 'oliver', n: 'Oliver', img: 'Bots/Oliver.png' }, { k: 'sakura', n: 'Sakura', img: 'Bots/Sakura.png' }, { k: 'off', n: 'Voice off' }];
-const cfg = { board: localStorage.cp4uBoard || 'aquamarine', pieces: localStorage.cp4uPieces || 'neo', bot: localStorage.cp4uBot || 'jade', sound: localStorage.cp4uSound !== '0' };
-const PIECE = (c, t) => {
-  const p = PIECES.find(x => x.k === cfg.pieces) || PIECES[0];
-  return p.k === 'lichess' ? LICHESS(c, t) : `${CC}/pieces/${p.dir || p.k}/150/${c}${t}.png`;
-};
-const PIECE_PREVIEW = p => p.k === 'lichess' ? LICHESS('w', 'n') : `${CC}/pieces/${p.dir || p.k}/150/wn.png`;
-let fbList = [...SEED], fileList = [], fbIds = new Set(); // fbList = Firebase (or built-in) puzzles, fileList = Lichess puzzles from the GitHub file
-let loadPct = -1;
-// Only REAL "Mate in 1..5" puzzles are allowed. Label must be 1-5 and, when the move list is known, the real mate length must equal the label
-// (move list of a mate in N has 2N-1 moves). Puzzles with other categories (not "Mate in ...") are left alone.
-function isGoodMate(p) {
-  const m = /^Mate in (\d+)$/.exec(p.category || ''); if (!m) return true;
-  const n = +m[1]; if (n < 1 || n > 5) return false;
-  const L = Array.isArray(p.solution) ? p.solution.length : 0;
-  return !L || Math.ceil(L / 2) === n;
-}
-function rebuild() {                                                       // merge both sources (Firebase wins when the same id exists in both)
-  const m = new Map(); fileList.forEach(p => m.set(p.id, p)); fbList.forEach(p => m.set(p.id, p));
-  puzzles = [...m.values()].filter(isGoodMate).sort((x, y) => x.id - y.id); setupElo();      // wrong / mate-in-6+ puzzles never show up
-}
-const pagerMid = (ci, n) => `<span>${ci >= 0 ? ci + 1 : '–'} / ${n}</span>`;
-function setLoad(p) {                                                  // one loader for the page + the puzzle files
-  loadPct = p;
-  const l = document.getElementById('pgLoad'); if (!l) return;
-  if (p < 0) { l.classList.add('done'); setTimeout(() => l.remove(), 400); return; }
-  l.style.setProperty('--p', p); const t = l.querySelector('.ldpct'); if (t) t.textContent = p + '%';
-}
-async function fetchText(file, onPct) {                                // download with progress (0..1)
-  const res = await fetch(file + '?v=' + PUZ_VER);
-  if (!res.ok) return { res };
-  const total = +res.headers.get('content-length') || 0;
-  if (!res.body || !total) { const text = await res.text(); onPct(1); return { res, text }; }
-  const rd = res.body.getReader(), dec = new TextDecoder(); let got = 0, text = '';
-  for (; ;) { const { done, value } = await rd.read(); if (done) break; got += value.length; text += dec.decode(value, { stream: true }); onPct(Math.min(got / total, 0.98)); }
-  return { res, text: text + dec.decode() };
-}
-async function loadFilePuzzles() {
-  const want = wantId, seenL = new Set(), nF = PUZ_FILES.length; fileList = []; setLoad(0);
-  for (let fi = 0; fi < nF; fi++) {
-    const file = PUZ_FILES[fi], upd = f => setLoad(Math.min(99, Math.floor((fi + f) / nF * 100)));
-    try {
-      const { res, text: txt } = await fetchText(file, upd);
-      if (!res.ok) { if (fi === 0) msg(file.slice(2) + ' not found (HTTP ' + res.status + ')', 'err'); upd(1); continue; }   // extra files are optional
-      const rows = JSON.parse(txt.slice(txt.indexOf('['), txt.lastIndexOf(']') + 1));
-      for (const p of rows) {
-        if (!p || !p.fen || !p.lichess || seenL.has(p.lichess) || !isGoodMate(p)) continue;
-        seenL.add(p.lichess);
-        const mate = /\d/.exec(p.category || ''), side = String(p.fen).split(' ')[1] === 'b' ? 'Black' : 'White';
-        fileList.push({
-          result: '', date: 'Rating ' + (p.rating || ''), category: 'Tactic',
-          description: `${side} to move${mate ? ' and mate in ' + mate[0] : ' – find the best moves'}.`,
-          ...p, id: +p.id, white: 'Unknown', black: 'Unknown'
+  <meta name="description"
+    content="ChessPuzzle4U | Chess Puzzle by Dhananjay Patil. Sharpen your skills with (mate-in 1 to 5) challenges using real-game positions">
+
+  <!-- Favicon -->
+  <link rel="icon" href="icons/brilliant.png">
+  <link rel="apple-touch-icon" href="icons/brilliant.png">
+
+  <meta name="keywords" content="chess, puzzles, mate, checkmate, chess training, chess problems">
+  <meta name="author" content="Dhananjay Patil">
+  <meta property="og:title" content="ChessPuzzle4U">
+  <meta property="og:description" content="Sharpen your chess skills with mate-in 1 to 5 challenges">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="icons/brilliant.png">
+
+  <link rel="stylesheet" href="style.css?v=6">
+  <!-- Image protection: no drag / save / long-press-save on images -->
+  <style>
+    img,
+    svg,
+    picture,
+    canvas,
+    video {
+      -webkit-user-drag: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+  </style>
+</head>
+
+<body class="sk-on">
+  <div id="pgLoad" style="--p:0">
+    <div class="ldpuz" role="img" aria-label="Animated chess puzzles: checkmate in 2">
+      <div class="ldboard" id="ldBoard"><em class="lmate">#</em></div>
+      <div class="ldmoves"><span id="ldMv"></span></div>
+    </div>
+    <div class="ldtitle" id="ldName">Mate in 2</div>
+    <div class="ldtrack"><i></i></div>
+    <span class="ldtxt">Loading ChessPuzzle4U&hellip; <b class="ldpct">0%</b></span>
+  </div>
+  <script>
+    /* Loader: plays verified mate-in-2 puzzles one after another until the page is ready.
+       To add a pattern, append an object to PZ: pcs = [colour, piece, square], mv = [from, to, label], mate = mated king's square. */
+    (function () {
+      var L = document.getElementById('pgLoad'), B = document.getElementById('ldBoard'),
+        MV = document.getElementById('ldMv'), NM = document.getElementById('ldName');
+      if (!L || !B) return;
+      var G = { K: '\u265A', Q: '\u265B', R: '\u265C', B: '\u265D', N: '\u265E', P: '\u265F' };
+      var PZ = [
+        { name: 'Rook ladder', mate: 'h8',
+          pcs: [['w', 'K', 'h1'], ['w', 'R', 'a1'], ['w', 'R', 'b2'], ['b', 'K', 'g8']],
+          mv: [['a1', 'a7', '1. Ra7'], ['g8', 'h8', '1\u2026 Kh8'], ['b2', 'b8', '2. Rb8#']] },
+        { name: 'Back-rank sacrifice', mate: 'g8',
+          pcs: [['w', 'Q', 'a4'], ['w', 'R', 'e1'], ['w', 'K', 'g1'], ['w', 'P', 'f2'], ['w', 'P', 'g2'], ['w', 'P', 'h2'],
+          ['b', 'R', 'c8'], ['b', 'K', 'g8'], ['b', 'P', 'f7'], ['b', 'P', 'g7'], ['b', 'P', 'h7']],
+          mv: [['a4', 'e8', '1. Qe8+'], ['c8', 'e8', '1\u2026 Rxe8'], ['e1', 'e8', '2. Rxe8#']] },
+        { name: 'Smothered mate', mate: 'h8',
+          pcs: [['w', 'N', 'e5'], ['w', 'Q', 'd5'], ['w', 'B', 'b3'], ['w', 'K', 'g1'], ['w', 'P', 'f2'], ['w', 'P', 'g2'], ['w', 'P', 'h2'],
+          ['b', 'K', 'h8'], ['b', 'R', 'f8'], ['b', 'P', 'g7'], ['b', 'P', 'h7']],
+          mv: [['d5', 'g8', '1. Qg8+'], ['f8', 'g8', '1\u2026 Rxg8'], ['e5', 'f7', '2. Nf7#']] }
+      ];
+      /* Use the board + colour theme the player picked (saved by applyBoard() in app.js) */
+      function mix(hex, t) { var n = parseInt(hex.slice(1), 16), r = n >> 16 & 255, g = n >> 8 & 255, b = n & 255;
+        return 'rgb(' + [r, g, b].map(function (v) { return Math.round(v + (255 - v) * t); }).join(',') + ')'; }
+      window.cpLd = function (o) {
+        var rs = document.documentElement.style, l = o.l, d = o.d;
+        if (!l || !d) { d = o.a || '#769656'; l = mix(d, .72); }          // texture boards: accent colours until the picture arrives
+        rs.setProperty('--l', l); rs.setProperty('--d', d);
+        if (o.th) for (var k in o.th) if (o.th[k]) rs.setProperty(k, o.th[k]);
+        if (o.img) {
+          var im = new Image();
+          im.onload = function () { B.style.backgroundImage = 'url(' + o.img + ')'; B.classList.add('img'); };
+          im.src = o.img;
+        } else { B.style.backgroundImage = ''; B.classList.remove('img'); }
+      };
+      var saved = null;
+      try { saved = JSON.parse(localStorage.cp4uLd || 'null'); } catch (e) { }
+      if (saved && saved.k === (localStorage.cp4uBoard || 'aquamarine')) window.cpLd(saved);
+      else window.cpLd({ k: 'aquamarine', l: '#eaf3ef', d: '#6dbea4' });   // first visit = the default board
+      var still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+      var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+      var alive = function () { return L.isConnected; };
+      var cx = function (s) { return s.charCodeAt(0) - 97; }, cy = function (s) { return 8 - +s[1]; };
+      function put(el, s) { el.style.transform = 'translate(calc(var(--cell) * ' + cx(s) + '), calc(var(--cell) * ' + cy(s) + '))'; }
+      async function play(z, i) {
+        var at = {}, els = [];
+        NM.textContent = 'Mate in 2 \u00B7 ' + z.name;
+        B.classList.remove('mated', 'out'); MV.textContent = ''; MV.className = '';
+        B.style.setProperty('--mx', cx(z.mate)); B.style.setProperty('--my', cy(z.mate));
+        z.pcs.forEach(function (p) {
+          var el = document.createElement('i'); el.className = 'lp ' + p[0]; el.textContent = G[p[1]] + '\uFE0E';
+          put(el, p[2]); B.appendChild(el); at[p[2]] = el; els.push(el);
         });
+        void B.offsetWidth; els.forEach(function (el) { el.classList.add('in'); });
+        if (still) {                                              // reduced motion: just show the final position
+          z.mv.forEach(function (m) { var t = at[m[1]]; if (t) t.remove(); var el = at[m[0]]; delete at[m[0]]; at[m[1]] = el; put(el, m[1]); });
+          MV.textContent = z.mv[z.mv.length - 1][2]; MV.className = 'mate'; B.classList.add('mated'); return;
+        }
+        await sleep(1000);
+        for (var k = 0; k < z.mv.length && alive(); k++) {
+          var m = z.mv[k], el = at[m[0]], tgt = at[m[1]];
+          MV.textContent = m[2]; MV.className = k === z.mv.length - 1 ? 'mate' : '';
+          if (tgt) tgt.classList.add('cap');                      // captured piece fades away
+          delete at[m[0]]; at[m[1]] = el; put(el, m[1]);
+          await sleep(1300);
+        }
+        if (!alive()) return;
+        B.classList.add('mated'); await sleep(2300);
+        B.classList.add('out'); await sleep(500);
+        els.forEach(function (el) { el.remove(); });
       }
-      upd(1); rebuild(); renderList();
-    } catch (e) { msg('Could not load ' + file.slice(2) + ': ' + e.message, 'err'); console.warn(e); }
-  }
-  setLoad(100); rebuild(); renderList(); setTimeout(() => setLoad(-1), 250);
-  if (want && (!cur || cur.id !== want) && !step) { const w = puzzles.find(x => x.id === want); if (w) open(w); }
-  if ($('#qSearch').value.trim()) runSearch();
-}
-const PER = 5;                                                           // puzzles shown per page in the list
-const esc = s => String(s ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
-const PUZ_FILE = './puzzles-lichess.js';
-const PUZ_FILES = [PUZ_FILE, './puzzles-lichess1.js', './puzzles-lichess2.js', './puzzles-lichess3.js'];
-const PUZ_VER = 5;   // change to 3, 4 ... each time you upload a new puzzles-lichess.js
-const FB = !String(firebaseConfig.apiKey).startsWith('PASTE');
-let puzzles = [...SEED], db = null, auth = null, F = {}, isAdmin = false, catK = 0;
-let BT = null, cur, game, sol, alt, tree, node, autoT, page = 0, promoMove = null, step = 0, user, flip, last, sel, targets = [], wrong, busy, done, hintLvl, fbSq, fbIcon, log = [];
-let wantId = +location.hash.slice(1) || +localStorage.cp4uLast;
-let prog = JSON.parse(localStorage.cp4u || '{"s":[],"streak":0,"day":""}');
-if (!prog.day) prog.streak = 0;                                            // old data had a "puzzles in a row" count: the daily streak starts fresh
-const saveProg = () => { localStorage.cp4u = JSON.stringify(prog); stats(); };
+      (async function () {
+        for (var i = 0; alive(); i = (i + 1) % PZ.length) { await play(PZ[i], i); if (still) return; }
+      })();
+    })();
+  </script>
+  <header>
+    <div class="brand"><img src="icons/brilliant.png" alt=""><b>ChessPuzzle<span>4U</span></b></div>
+    <div class="stats">
+      <span id="stStreak"><img class="sti" src="svg/fireG.svg" alt="streak"> 0</span>
+      <button id="btnSet" class="ghost" title="Board &amp; pieces"><img class="cog" src="svg/cog.svg"
+          alt="Settings"></button>
+      <button id="btnLogin" class="ghost">Admin</button>
+    </div>
+  </header>
 
-/* ---------- daily streak (Chess.com style, saved in localStorage) ----------
-   Solve at least one puzzle per day. Missing ONE day is forgiven (streak is "paused"),
-   missing two days in a row resets it. Change STREAK_MAX_GAP to make it stricter / more forgiving:
-   1 = must play every day, 2 = one missed day is OK (default), 3 = two missed days are OK ... */
-const STREAK_MAX_GAP = 2;
-const FLY_MS = 2000;       // how long the flame flies to the nav bar (ms)
-const dayKey = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
-const dayGap = (a, b) => { const p = s => Date.UTC(...s.split('-').map((n, i) => i === 1 ? n - 1 : +n)); return Math.round((p(b) - p(a)) / 864e5); };
-const liveStreak = () => (prog.day && dayGap(prog.day, dayKey()) <= STREAK_MAX_GAP) ? prog.streak : 0;   // too many missed days = 0
-function bumpStreak() {                                                    // call when a puzzle is solved; returns true if the streak just went up
-  const t = dayKey(); if (prog.day === t) return false;                    // already counted today
-  const g = prog.day ? dayGap(prog.day, t) : 99;
-  prog.streak = (g > 0 && g <= STREAK_MAX_GAP) ? (prog.streak || 0) + 1 : 1; prog.day = t;
-  return true;
-}
-const streakState = () => { const n = liveStreak(), paused = n > 0 && prog.day !== dayKey(); return { n, paused, icon: n === 0 ? 'fireG' : paused ? 'fireY' : 'fireR' }; };   // fireG = 0 / reset, fireY = paused, fireR = active
-const fireImg = (icon, cls) => `<img class="${cls}" src="svg/${icon}.svg" alt="streak" onerror="this.onerror=null;this.src='svg/fire.svg'">`;     // falls back to fire.svg if a file is missing
-let streakHold = null, lastShown = '';                                                     // old {n, icon} shown in the nav bar until the flying flame arrives
-const stats = () => {
-  const { n, icon } = streakHold || streakState(), el = $('#stStreak');
-  lastShown = n + icon;
-  $('#stSolved').innerHTML = '<img class="sti" src="svg/checklist.svg" alt="solved"> ' + prog.s.length;
-  el.innerHTML = fireImg(icon, icon === 'fireY' ? 'sti tada-loop' : 'sti') + ' ' + n;   // fireY (paused) = tada animation again and again
-  el.setAttribute('role', 'button'); el.tabIndex = 0; el.title = 'Tap to see your streak';
-};
-setInterval(() => { if (streakHold) return; const t = streakState(); if (t.n + t.icon !== lastShown) stats(); }, 60000);   // icon changes by itself after midnight (only redraws on a real change)
+  <main>
+    <section id="solver" class="card">
+      <div class="pinfo">
+        <div><b id="pTitle">Loading…</b>
+          <div id="pSub" class="mut"></div>
+        </div><button id="bShare" class="ghost" type="button" aria-label="Share"><img src="svg/Share.svg" alt="Share"
+            width="20" height="20"></button>
+      </div>
 
-/* ---------- streak goes up: a flame flies from the last (mating) move to the nav bar, then the number updates + one tada ---------- */
-function flyStreak(sq) {
-  let ended = false;
-  const end = () => {
-    if (ended) return; ended = true;
-    if (fl) fl.remove();
-    streakHold = null; stats();                                            // now show the new number + icon
-    const ic = $('#stStreak .sti');
-    if (ic) { ic.classList.add('tada-once'); ic.addEventListener('animationend', () => ic.classList.remove('tada-once'), { once: true }); }
-  };
-  const from = sq && document.querySelector('#board [data-sq="' + sq + '"]'), to = $('#stStreak .sti');
-  let fl = null;
-  if (!from || !to || matchMedia('(prefers-reduced-motion: reduce)').matches) return end();
-  const a = from.getBoundingClientRect(), b = to.getBoundingClientRect(), S = 44;
-  fl = document.createElement('img'); fl.className = 'fly'; fl.alt = ''; fl.src = 'svg/fireR.svg';
-  fl.onerror = () => { fl.onerror = null; fl.src = 'svg/fire.svg'; };
-  fl.style.cssText = 'left:' + (a.left + a.width / 2 - S / 2) + 'px;top:' + (a.top + a.height / 2 - S / 2) + 'px;width:' + S + 'px;height:' + S + 'px';
-  document.body.appendChild(fl);
-  if (cfg.sound) { try { new Audio('Audio/puzzle-correct.mp3').play().catch(() => { }); } catch { } }   // plays once when the flame starts flying
-  const dx = (b.left + b.width / 2) - (a.left + a.width / 2), dy = (b.top + b.height / 2) - (a.top + a.height / 2);
-  const an = fl.animate([
-    { transform: 'translate(0,0) scale(.3)', opacity: 0 },
-    { transform: 'translate(0,0) scale(1.3)', opacity: 1, offset: .25 },                       // pops up on the mating square
-    { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(' + (b.width / S) + ')', opacity: 1 }   // flies to the nav bar
-  ], { duration: FLY_MS, easing: 'cubic-bezier(.45,0,.25,1)', fill: 'forwards' });
-  an.onfinish = end; an.oncancel = end; setTimeout(end, FLY_MS + 1000);             // safety: never leave the old number stuck
-}
+      <!-- fixed square container: board + pieces always stay aligned -->
+      <div class="bwrap">
+        <div id="board" class="board"></div>
+        <svg id="anArrows" class="ma-arrows" viewBox="0 0 100 100" preserveAspectRatio="none"></svg>
+        <div id="promo" class="promo hidden">
+          <div class="pbox"></div>
+        </div>
+      </div>
 
-/* ---------- notification (toast) + notify.mp3 : click the 🔥 + number ---------- */
-let toastT;
-function toast(icon, title, text) {
-  let t = $('#toast');
-  if (!t) { t = document.createElement('div'); t.id = 'toast'; t.setAttribute('role', 'status'); t.addEventListener('click', () => t.classList.remove('show')); document.body.appendChild(t); }
-  t.innerHTML = fireImg(icon, 'ti') + `<div><b>${title}</b><span>${text}</span></div>`;
-  const h = document.querySelector('header');                          // ← add this line
-  t.style.top = ((h ? h.getBoundingClientRect().bottom : 47) + 3) + 'px';   // ← and this one: 8px below the nav bar's last line
-  t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');         // restart the slide-in animation
-  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 5000);
-  if (cfg.sound) { try { new Audio('Audio/notify.mp3').play().catch(() => { }); } catch { } }
-}
-function showStreakInfo() {
-  const { n, paused, icon } = streakState(), d = n === 1 ? 'day' : 'days';
-  if (n === 0 && !prog.day) return toast(icon, 'No streak yet', 'Solve a puzzle today to start your daily streak.');
-  if (n === 0) return toast(icon, 'Streak reset to 0', 'You missed 2 days in a row. Solve a puzzle today to start again.');
-  if (paused) return toast(icon, `Streak paused · ${n} ${d}`, 'You missed a day. Solve a puzzle today to keep it going – miss another day and it resets to 0.');
-  toast(icon, `${n} - Day Streak`, 'You solved a puzzle today. Come back tomorrow to keep your streak growing.');
-}
-document.addEventListener('click', e => { if (e.target.closest('#stStreak')) showStreakInfo(); });
-document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.closest && e.target.closest('#stStreak')) { e.preventDefault(); showStreakInfo(); } });
+      <div class="msgrow">
+        <div id="msg" class="msg">Choose a puzzle from the list.</div>
+        <div class="pstats"><span id="stSolved"><img class="sti" src="svg/checklist.svg" alt="solved"> 00</span></div>
+      </div>
+      </div>
+      <div id="pager" class="pager"><button disabled>Prev</button><span></span><button disabled>Next</button></div>
+      <div class="btns">
+        <button id="bHint" class="ib" aria-label="Hint"><img src="svg/hint.svg" alt=""></button>
+        <button id="bSol" class="ib" aria-label="Solution"><img src="svg/solution.svg" alt=""></button>
+        <button id="bReset" class="ib" aria-label="Retry"><img src="svg/retry.svg" alt=""></button>
+        <button id="bAna" class="ib" aria-label="Analysis"><img src="svg/analysis.svg" alt=""></button>
+        <button id="bNext" class="ib pri" aria-label="Next"><img src="svg/next.svg" alt=""></button>
+      </div>
+      <div id="moves" class="moves"></div>
+      <div id="anLine" class="anline off"></div>
+    </section>
 
-/* ---------- sound (files in Audio/, falls back to WebAudio beeps) ---------- */
-let ac;
-function beep(name) {
-  ac = ac || new (window.AudioContext || window.webkitAudioContext)();
-  const f = { move: [440], capture: [300], check: [660, 520], correct: [600, 800], wrong: [200, 150], win: [520, 660, 800], promote: [500, 700, 900, 1100] }[name] || [440];
-  f.forEach((hz, i) => {
-    const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = hz; o.connect(g); g.connect(ac.destination);
-    const t = ac.currentTime + i * .1; g.gain.setValueAtTime(.12, t); g.gain.exponentialRampToValueAtTime(.001, t + .15); o.start(t); o.stop(t + .16);
-  });
-}
-function sound(name) { if (!cfg.sound) return; try { const a = new Audio(SOUNDS[name]); a.play().catch(() => beep(name)); } catch { beep(name); } }
-const moveSound = (m, skipPromo) => sound(m.promotion && !skipPromo ? 'promote' : game.in_check() ? 'check' : m.captured ? 'capture' : 'move');
+    <section class="side">
+      <div class="search">
+        <div class="srow"><input id="qSearch" type="search" placeholder="Search by ID or player name..."
+            autocomplete="off">
+          <button id="qGo" class="pri">Search</button><button id="qClear" class="ghost" title="Clear">✕</button>
+        </div>
+        <div id="qRes" class="qres hidden"></div>
+      </div>
+      <div class="elo hidden" id="eloBox">
+        <div class="elo-top">
+          <span class="mut">Rating</span><b id="eloTxt">Any rating</b>
+          <button id="eloReset" class="ghost" type="button">Reset</button>
+        </div>
+        <div class="rs">
+          <div class="rs-track">
+            <div class="rs-fill" id="rsFill"></div>
+          </div>
+          <input type="range" id="eloA" aria-label="Lowest rating (A)">
+          <input type="range" id="eloB" aria-label="Highest rating (B)">
+        </div>
+        <div class="rs-ends"><span>Lowest <b id="eloLo">–</b></span><span>Highest <b id="eloHi">–</b></span></div>
+      </div>
+      <div id="cats" class="cats">
+        <div class="cat"></div>
+        <div class="cat"></div>
+        <div class="cat"></div>
+        <div class="cat"></div>
+        <div class="cat"></div>
+        <div class="cat"></div>
+      </div>
+      <div id="list" class="list">
+        <div class="pcard"></div>
+        <div class="pcard"></div>
+        <div class="pcard"></div>
+        <div class="pcard"></div>
+        <div class="pcard"></div>
+      </div>
+    </section>
 
-/* ---------- brilliant sacrifice voice (files in Audio/voice/) ---------- */
-const VAL = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 0 };
-const PNAME = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
-let voiceTok = 0, voiceAudio = null;
+    <section id="admin" class="card hidden">
+      <h3>Admin panel <button id="bLogout" class="ghost">Logout</button></h3>
+      <div class="delbox">
+        <div class="delhead">🗑 Delete puzzles</div>
+        <p class="mut">Tick puzzles in the list (checkbox on each card), or delete many at once. Newest puzzles are
+          deleted first.</p>
+        <div class="delgrid">
+          <label>Category
+            <select id="dCat">
+              <option value="0">All</option>
+              <option value="1">Mate in 1</option>
+              <option value="2">Mate in 2</option>
+              <option value="3">Mate in 3</option>
+              <option value="4">Mate in 4</option>
+              <option value="5">Mate in 5</option>
+            </select>
+          </label>
+          <label>Source
+            <select id="dSrc">
+              <option value="lichess">Lichess only</option>
+              <option value="all">All puzzles</option>
+            </select>
+          </label>
+          <label>How many (0 = all)
+            <input id="dNum" type="number" value="0" min="0">
+          </label>
+          <button id="dGo" class="danger">Delete matching</button>
+        </div>
+        <div class="delbtns">
+          <button id="dAll">Tick all in current category</button>
+          <button id="dNone">Untick all</button>
+          <button id="dBad" class="danger">Delete wrong mates (Firebase)</button>
+          <button id="dSel" class="danger">Delete ticked (0)</button>
+        </div>
+      </div>
+      <div id="amsg" class="msg"></div>
+    </section>
 
-// returns e.g. "brilliant-queen" if the move just played is a real sacrifice, otherwise ''
-function sacVoice(mv) {
-  if (mv.piece === 'k') return '';
-  if (mv.promotion) return 'brilliant-promotion-' + PNAME[mv.promotion];   // dxe1=N → knight promotion
-  const taken = mv.captured ? VAL[mv.captured] : 0, worth = VAL[mv.piece] > taken;
-  // 1) the piece can really be captured on its next move = a real sacrifice
-  if (worth && game.moves({ verbose: true }).some(o => o.to === mv.to && o.captured)) return 'brilliant-' + PNAME[mv.piece];
-  // 2) it gives check / mate and cannot be captured -> the "check" / "move" voice speaks instead
-  if (game.in_check()) return '';
-  // 3) quiet capture of a smaller piece that cannot be recaptured (Bxg2) -> still a sacrifice
-  return mv.captured && worth ? 'brilliant-' + PNAME[mv.piece] : '';
-}
-// for the 2nd, 3rd... move of the puzzle: is the move just played a REAL sacrifice?
-// = the opponent can capture that piece and the exchange costs us 2+ points (unprotected piece = we lose the whole piece)
-function realSac(mv) {
-  if (mv.piece === 'k' || mv.promotion || game.in_checkmate()) return false;
-  const taken = mv.captured ? VAL[mv.captured] : 0;
-  return game.moves({ verbose: true }).filter(o => o.to === mv.to && o.captured).some(o => {
-    game.move({ from: o.from, to: o.to, promotion: o.promotion });                       // opponent takes the piece...
-    const protectedPiece = game.moves({ verbose: true }).some(r => r.to === mv.to && r.captured);   // ...can we take back?
-    game.undo();
-    return taken + (protectedPiece ? VAL[o.piece] : 0) - VAL[mv.piece] <= -2;
-  });
-}
-const voiceText = v => {
-  const p = v.split('-');
-  if (p[1] === 'promotion') return 'What a brilliant ' + p[2] + ' promotion!';
-  return 'What a brilliant ' + p[1] + (v.startsWith('move-') ? ' move!' : v.startsWith('check-') ? ' check!' : ' sacrifice!');
-};
-// plays the file, then calls done() when it ends (also if the file is missing, so the game never gets stuck)
-function playVoice(file, done) {
-  const tok = voiceTok; let fired = false;
-  const go = () => { if (fired) return; fired = true; if (tok === voiceTok && done) done(); };
-  try {
-    voiceAudio = new Audio('Audio/voice/' + cfg.bot + '/' + file + '.mp3');
-    voiceAudio.onended = go; voiceAudio.onerror = go;
-    voiceAudio.play().catch(go);
-    setTimeout(go, 6000);
-  } catch { go(); }
-}
+    <!-- admin-only board editor / analysis (built by Analysis.js) -->
+    <section id="analysis" class="card hidden"></section>
+  </main>
 
-/* ---------- board (8x8 equal cells, piece fills its cell, a-h / 1-8 labels) ---------- */
-function draw() {
-  let h = '';
-  for (let r = 0; r < 8; r++) for (let f = 0; f < 8; f++) {
-    const file = flip ? 7 - f : f, rank = flip ? r : 7 - r, name = 'abcdefgh'[file], sq = name + (rank + 1), pc = game.get(sq);
-    const cls = ['sq', (file + rank) % 2 ? 'l' : 'd', sel === sq && 'sel', last && (last.from === sq || last.to === sq) && 'last', targets.includes(sq) && 'tgt'].filter(Boolean).join(' ');
-    const coord = (f === 0 ? `<span class="co rk">${rank + 1}</span>` : '') + (r === 7 ? `<span class="co fl">${name}</span>` : '');
-    const piece = pc ? `<img class="pc" src="${PIECE(pc.color, pc.type)}" alt="${pc.color}${pc.type}" draggable="false" decoding="sync" onerror="this.onerror=null;this.src='${LICHESS(pc.color, pc.type)}'">` : '';
-    const badge = fbSq === sq ? `<img class="fbi" src="icons/${fbIcon}.png" alt="">` : '';
-    const logo = r === 7 && f === 0 ? '<img class="dlogo" src="src/dany-logo.png" alt="" draggable="false" onerror="this.remove()">' : '';
-    h += `<div class="${cls}" data-sq="${sq}">${logo}${coord}${piece}${badge}</div>`;
-  }
-  $('#board').innerHTML = h;
-  $('#moves').innerHTML = log.map((s, i) => (i % 2 === 0 ? `<b>${Math.floor(i / 2) + 1}.</b> ` : '') + s).join(' ');
-}
-const msg = (t, c = '') => {
-  if (BT && cur) { t = cur.description || 'Find the best moves.'; c = ''; }          // battle: always keep the puzzle description visible (e.g. "Black to move and mate in 3.")
-  const m = $('#msg'); m.textContent = t; m.className = 'msg ' + c;
-};
-function preloadPieces() { for (const c of 'wb') for (const t of 'pnbrqk') new Image().src = PIECE(c, t); }
+  <dialog id="setDlg">
+    <h3>Settings <button id="setClose" class="ghost" type="button">✕</button></h3>
+    <div class="setlbl sndrow">Sound :
+      <button id="sndTog" type="button" class="tog" aria-label="Sound"><i></i></button>
+      <span id="sndIco" class="sndico"></span>
+    </div>
+    <div class="setlbl">Bot : <b id="curBot"></b></div>
+    <div id="botOpts" class="opts"></div>
+    <div class="setlbl">Board : <b id="curBoard"></b></div>
+    <div id="boardOpts" class="opts"></div>
+    <div class="setlbl">Pieces : <b id="curPieces"></b></div>
+    <div id="pieceOpts" class="opts"></div>
 
-/* ---------- move tree: PGN with variations  "1. Rxe8+ Qxe8 2. Bxd6+ (2. Qe6 ...) 2... Qe7" ---------- */
-const RES = /^(1-0|0-1|1\/2-1\/2|\*)$/;
-function parseTree(text) {
-  const toks = String(text || '').replace(/\{[^}]*\}/g, ' ').replace(/\$\d+/g, ' ').replace(/([()])/g, ' $1 ').split(/\s+/).filter(Boolean);
-  const root = { san: '', raw: '', kids: [] }; let i = 0;
-  (function seq(start) {
-    let prev = start, before = null;
-    while (i < toks.length) {
-      const t = toks[i++];
-      if (t === ')') return;
-      if (t === '(') { if (before) seq(before); else { let d = 1; while (i < toks.length && d) { const x = toks[i++]; d += x === '(' ? 1 : x === ')' ? -1 : 0; } } continue; }
-      if (RES.test(t) || /^\d+\.+$/.test(t)) continue;
-      const raw = t.replace(/^\d+\.+/, ''); if (!raw) continue;
-      const nd = { san: norm(raw), raw, kids: [] }; prev.kids.push(nd); before = prev; prev = nd;     // "(" = alternative to the move just played
-    }
-  })(root);
-  return root;
-}
-const mainLine = r => { const out = []; for (let n = r.kids[0]; n; n = n.kids[0]) out.push(n.raw); return out; };
-function checkTree(nd, g) {
-  for (const k of nd.kids) { if (!g.move(k.san, { sloppy: true })) throw Error(`Illegal move "${k.raw}" in the pgn line`); checkTree(k, g); g.undo(); }
-}
+  </dialog>
 
-/* ---------- solver ---------- */
-function open(p, scroll = false) {
-  anStop(); clearTimeout(autoT); voiceTok++; if (voiceAudio) voiceAudio.pause();
-  cur = p; game = new Chess(p.fen); alt = {};
-  tree = p.pgn ? parseTree(p.pgn) : null; node = tree;
-  sol = tree ? mainLine(tree) : p.solution;
-  for (const k in (p.alternatives || {})) alt[norm(k)] = p.alternatives[k];
-  step = 0; user = game.turn(); flip = user === 'b'; last = sel = fbSq = null; targets = []; wrong = hintLvl = 0; busy = done = false; log = []; promoMove = null;
-  $('#promo').classList.add('hidden');
-  $('#pTitle').textContent = `${p.white} vs ${p.black}`;
-  $('#pSub').textContent = `#${p.id} · ${p.date || ''} · ${p.category || ''} · ${p.result || ''}`;
+  <dialog id="dlg">
+    <form method="dialog" id="loginForm">
+      <h3>Only for Admin login</h3>
+      <input id="lEmail" type="email" placeholder="Email" required autocomplete="username">
+      <input id="lPass" type="password" placeholder="Password" required autocomplete="current-password">
+      <div id="lMsg" class="msg"></div>
+      <div class="btns"><button type="button" id="lCancel">Cancel</button><button type="button" id="lForgot">Forgot
+          password</button><button class="pri" id="lGo">Login</button></div>
+    </form>
+  </dialog>
 
-  msg(p.description || 'Find the best moves.');
-  const idx = filtered().findIndex(x => x.id === p.id); if (idx >= 0) page = Math.floor(idx / PER);
-  draw(); renderList(); fitBoard(); localStorage.cp4uLast = p.id; history.replaceState(null, '', '#' + p.id);
-  if (scroll && window.innerWidth < 900 && $('#solver').getBoundingClientRect().top < 0) $('#solver').scrollIntoView({ behavior: 'smooth', block: 'start' });   // only when picked from the list and the board is off-screen
-}
-// old format (solution + alternatives)
-const accepted = () => {
-  const e = sol[step], pv = sol[step - 1];
-  return [e, ...(alt[norm(e)] || []), ...(step === 0 ? alt.first_move || [] : []), ...(pv ? alt[norm(pv)] || [] : [])].map(norm);
-};
-// new format (pgn with variations): every move listed at this point of the tree is accepted
-const kidFor = mv => node.kids.find(k => k.san === norm(mv.san));
+  <script>
+    /* block right-click menu, dragging and "save image" on all images / svg */
+    (function () {
+      var isImg = function (t) { return t && t.closest && t.closest('img, svg, picture, canvas, video'); };
+      document.addEventListener('contextmenu', function (e) { if (isImg(e.target)) e.preventDefault(); }, true);
+      document.addEventListener('dragstart', function (e) { if (isImg(e.target)) e.preventDefault(); }, true);
+      document.addEventListener('copy', function (e) { if (isImg(e.target)) e.preventDefault(); }, true);
+    })();
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+  <script type="module" src="app.js?v=4"></script>
+</body>
 
-function tryMove(from, to, promo = 'q') {
-  if (BT && BT.locked()) return false;
-  const mv = game.move({ from, to, promotion: promo });
-  if (!mv) return false;
-  sel = null; targets = [];
-  const kid = tree ? kidFor(mv) : null;
-  const good = (tree ? !!kid : accepted().includes(norm(mv.san))) || game.in_checkmate();
-  if (good) {
-    const brilliant = step === 0 || /!!/.test(tree ? (kid ? kid.raw : '') : (sol[step] || '')) || realSac(mv);   // first move, any "!!" move, or a real sacrifice on any later move
-    last = mv; step++; log.push(mv.san); fbSq = mv.to; fbIcon = brilliant ? 'brilliant' : 'best';
-    if (tree) node = kid || { san: norm(mv.san), raw: mv.san, kids: [] };
-    moveSound(mv, true);                                                  // promote.mp3 already played when the dialog opened
-    const kind = !brilliant ? '' : mv.piece === 'k' ? 'move-' : game.in_checkmate() ? 'move-' : game.in_check() ? 'check-' : '';   // king: always "move-king" (there is no check-king file)
-    const v = (cfg.bot === 'off' || !cfg.sound || BT) ? '' : (brilliant ? sacVoice(mv) : '') || (kind ? kind + PNAME[mv.piece] : '');
-    console.log('move:', mv.san, '| piece:', mv.piece, '| lichess:', !!cur.lichess, '| mate:', game.in_checkmate(), '| voice:', v || 'none');
-    if (game.in_checkmate() || (tree ? !node.kids.length : step >= sol.length)) {
-      draw();
-      if (v) { busy = true; msg(voiceText(v), 'ok'); setTimeout(() => playVoice(v, finish), 350); }
-      else finish();
-      return true;
-    }
-    busy = true; msg(v ? voiceText(v) : '✔ Correct!', 'ok'); draw();
-    if (v) setTimeout(() => playVoice(v, () => setTimeout(reply, 400)), 350);   // voice first, then the opponent's move
-    else setTimeout(reply, 600);
-  } else {
-    game.undo(); wrong++; fbSq = to; fbIcon = 'blunder'; sound('wrong'); if (BT) { draw(); BT.wrong(); return true; } msg('✖ Not the best move – try again.', 'err'); draw();
-    setTimeout(() => { fbSq = null; draw(); }, 700);                      // no shake
-  }
-  return true;
-}
-function reply() {
-  if (AN.on || !busy || done) return;                                    // paused by analysis (or already played)
-  let m;
-  if (tree) { const r = node.kids[0]; m = game.move(r.san, { sloppy: true }); node = r; }
-  else m = game.move(sol[step], { sloppy: true });
-  m = m || game.move(game.moves({ verbose: true })[0]);
-  last = m; step++; log.push(m.san); fbSq = null; busy = false; moveSound(m);
-  if (tree && !node.kids.length) { draw(); return finish(); }
-  msg('Your move.'); draw();
-}
-const nextInList = () => { const l = filtered(), i = l.findIndex(p => p.id === cur.id); return i >= 0 ? l[i + 1] : l[0]; };
-function finish() {
-  done = true; sound('win'); if (BT) return BT.solved();
-  const nx = nextInList();
-  msg((wrong ? 'Solved!' : 'Perfect – solved without a mistake!') + (nx ? ' Loading next puzzle…' : 'End of this category!'), 'ok');
-  if (!prog.s.includes(cur.id)) prog.s.push(cur.id);
-  const oldStreak = streakState(), up = bumpStreak();
-  if (up) streakHold = oldStreak;                                          // nav bar keeps the old number until the flame arrives
-  saveProg(); renderList();
-  if (up) flyStreak(last && last.to);
-  if (nx) { const id = cur.id; clearTimeout(autoT); autoT = setTimeout(() => { if (cur && cur.id === id && done) open(nx); }, 2500); }
-}
-
-/* promotion chooser */
-const isPromo = (from, to) => game.moves({ square: from, verbose: true }).some(m => m.to === to && m.flags.includes('p'));
-function askPromo(from, to) {
-  promoMove = { from, to }; sound('promote');                              // plays Audio/promote.mp3 when the dialog opens
-  const names = { q: 'Queen', r: 'Rook', b: 'Bishop', n: 'Knight' };
-  $('#promo .pbox').innerHTML = ['q', 'r', 'b', 'n'].map(t => `<button type="button" data-t="${t}" title="${names[t]}"><img src="${PIECE(user, t)}" alt="${names[t]}" onerror="this.onerror=null;this.src='${LICHESS(user, t)}'"></button>`).join('');
-  $('#promo').classList.remove('hidden');
-}
-$('#promo').onclick = e => {
-  const b = e.target.closest('button[data-t]'), pm = promoMove; promoMove = null; $('#promo').classList.add('hidden');
-  if (b && pm) tryMove(pm.from, pm.to, b.dataset.t); else { sel = null; targets = []; draw(); }
-};
-
-$('#board').onclick = e => {
-  const el = e.target.closest('.sq'); if (AN.on && el) return anClick(el.dataset.sq);
-  if (!el || !cur || busy || done) return;
-  const sq = el.dataset.sq;
-  if (sel && sel !== sq) { if (isPromo(sel, sq)) return askPromo(sel, sq); if (tryMove(sel, sq)) return; }
-  const pc = game.get(sq); sel = pc && pc.color === user ? sq : null;
-  targets = sel ? game.moves({ square: sq, verbose: true }).map(m => m.to) : []; draw();
-};
-$('#bHint').onclick = () => {
-  if (!cur || done || busy || AN.on) return;
-  const want = tree ? node.kids.map(k => k.san) : [norm(sol[step])];
-  const m = game.moves({ verbose: true }).find(m => want.includes(norm(m.san))); if (!m) return;
-  sel = m.from; targets = hintLvl ? [m.to] : []; hintLvl++; msg(hintLvl > 1 ? 'Play the highlighted move.' : 'Hint: move this piece.'); draw();
-};
-$('#bReset').onclick = () => cur && open(cur);
-$('#bNext').onclick = () => {
-  const l = filtered(); if (!l.length) return;
-  open(l.find(p => !prog.s.includes(p.id) && p.id !== cur?.id) || l[(l.findIndex(p => p.id === cur?.id) + 1) % l.length]);
-};
-$('#bSol').onclick = () => {
-  if (!cur) return; open(cur); done = busy = true; msg('Solution:');
-  sol.forEach((s, i) => setTimeout(() => { if (AN.on) return; const m = game.move(s, { sloppy: true }); if (!m) return; last = m; log.push(m.san); moveSound(m); draw(); }, 850 * (i + 1)));
-};
-
-/* ---------- Analysis on the main board (1 engine line + arrow, free moves, never counted in the puzzle) ---------- */
-const SF_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js';
-const AN = { on: false, sf: null, ready: false, run: false, want: false, ign: false, fen: '', info: null, t: null, dt: null, n: 0, logLen: 0, last0: null, msg0: '', cls0: '', top: null, cmp: null };
-const anSoon = () => { if (!AN.dt) AN.dt = setTimeout(() => { AN.dt = null; anDraw(); }, 120); };
-
-function anEnsure() {
-  if (AN.sf) return;
-  try { AN.sf = new Worker(URL.createObjectURL(new Blob([`importScripts('${SF_URL}');`], { type: 'application/javascript' }))); }
-  catch { anBox('', '<span class="mut">Engine could not start.</span>'); return; }
-  AN.sf.onmessage = e => anMsg(String(e.data));
-  AN.sf.onerror = () => { AN.sf = null; AN.ready = false; AN.run = false; anBox('', '<span class="mut">Engine failed to load (internet / ad-blocker?).</span>'); };
-  AN.sf.postMessage('uci');
-}
-function anMsg(line) {
-  if (line === 'uciok') return AN.sf.postMessage('isready');
-  if (line === 'readyok') { AN.ready = true; return anRequest(); }
-  if (line.startsWith('bestmove')) { AN.run = false; AN.ign = false; if (AN.want) anSearch(); else anSoon(); return; }
-  if (AN.ign || !line.startsWith('info') || /lowerbound|upperbound/.test(line)) return;
-  const m = line.match(/depth (\d+).*?score (cp|mate) (-?\d+).*? pv (.+)$/); if (!m) return;
-  AN.info = { depth: +m[1], kind: m[2], val: +m[3], pv: m[4].trim().split(/\s+/) }; anSoon();
-}
-function anSearch() {
-  AN.want = false; AN.info = null;
-  if (!AN.on || !AN.sf || game.game_over()) return anDraw();
-  AN.fen = game.fen(); AN.run = true; AN.ign = false;
-  AN.sf.postMessage('setoption name MultiPV value 1'); AN.sf.postMessage('position fen ' + AN.fen); AN.sf.postMessage('go depth 16');
-  anDraw();
-}
-function anRequest() {                                   // analyse the position that is on the board now
-  if (!AN.on) return;
-  anEnsure(); if (!AN.sf || !AN.ready) return;
-  clearTimeout(AN.t);
-  AN.t = setTimeout(() => { if (AN.run) { AN.want = true; AN.ign = true; AN.sf.postMessage('stop'); } else anSearch(); }, 200);
-}
-function anArrow(a, b, color, op, w) {
-  const c = s => { const f = 'abcdefgh'.indexOf(s[0]), r = +s[1] - 1, col = flip ? 7 - f : f, row = flip ? r : 7 - r; return [(col + .5) * 12.5, (row + .5) * 12.5]; };
-  const [x1, y1] = c(a), [x2, y2] = c(b), dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len, hl = 3.8, hw = 2.7;
-  const sx = x1 + ux * 2, sy = y1 + uy * 2, ex = x2 - ux * (hl + .8), ey = y2 - uy * (hl + .8);
-  const tx = x2 - ux, ty = y2 - uy, bx = x2 - ux * (hl + 1), by = y2 - uy * (hl + 1), px = -uy, py = ux;
-  return `<line x1="${sx}" y1="${sy}" x2="${ex}" y2="${ey}" stroke="${color}" stroke-width="${w}" stroke-linecap="round" opacity="${op}"/>`
-    + `<polygon points="${tx},${ty} ${bx + px * hw},${by + py * hw} ${bx - px * hw},${by - py * hw}" fill="${color}" opacity="${op}"/>`;
-}
-
-// SAN with the selected piece set: "Qg1" -> [queen icon]g1
-const sanFig = (san, col) => /^[KQRBN]/.test(san)
-  ? `<img class="sf" src="${PIECE(col, san[0].toLowerCase())}" alt="${san[0]}" draggable="false" onerror="this.onerror=null;this.src='${LICHESS(col, san[0].toLowerCase())}'">${san.slice(1)}`
-  : san;
-// box under the board: small note on top (what you played vs. the engine's best) + eval and engine line
-const anNote = ev => {
-  const c = AN.cmp; if (!c) return '';
-  return c.same ? `✔ <b>${sanFig(c.played, c.col)}</b> is the engine's top move` : `You played <b>${sanFig(c.played, c.col)}</b>${ev ? ' (' + ev + ')' : ''} · best was <b>${sanFig(c.best, c.col)}</b> (${c.bestEv})`;
-};
-function anBox(note, main) {
-  const undo = AN.n ? '<button id="anUndo" type="button" class="ghost" aria-label="Take back the last move">↩</button>' : '';
-  $('#anLine').innerHTML = `<div class="an-note">${note || anNote('')}</div><div class="an-main">${main}${undo}</div>`;
-}
-function anDraw() {
-  const svg = $('#anArrows');
-  if (!AN.on) { svg.innerHTML = ''; $('#anLine').innerHTML = ''; return; }
-  if (game.game_over()) { svg.innerHTML = ''; return anBox(anNote(''), '<span class="mut">Game over – no engine moves.</span>'); }
-  if (!AN.info || AN.fen !== game.fen()) { svg.innerHTML = ''; return anBox(anNote(''), '<span class="mut">' + (AN.sf ? 'Engine is thinking…' : 'Loading engine…') + '</span>'); }
-  const r = AN.info, parts = AN.fen.split(' '), mul = parts[1] === 'w' ? 1 : -1, g = new Chess(AN.fen), sans = [], ucis = [];
-  for (const u of r.pv.slice(0, 12)) { const m = g.move({ from: u.slice(0, 2), to: u.slice(2, 4), promotion: u[4] }); if (!m) break; sans.push(m.san); ucis.push(u); }
-  if (!sans.length) return;
-  const wv = (r.kind === 'mate' ? (r.val > 0 ? 1e4 : -1e4) : r.val) * mul;
-  const ev = r.kind === 'mate' ? (r.val * mul < 0 ? '-' : '') + '#' + Math.abs(r.val) : (wv > 0 ? '+' : '') + (wv / 100).toFixed(2);
-  AN.top = { fen: AN.fen, uci: ucis[0], san: sans[0], ev };                // remembered to compare with the next move the player makes
-  let n = parseInt(parts[5]) || 1, c = parts[1], mv = '';
-  sans.forEach((san, j) => { mv += (c === 'w' ? `<span class="mut">${n}.</span> ` : j === 0 ? `<span class="mut">${n}...</span> ` : '') + sanFig(san, c) + ' '; if (c === 'b') n++; c = c === 'w' ? 'b' : 'w'; });
-  anBox(anNote(ev), `<span class="an-ev ${wv < 0 ? 'neg' : ''}">${ev}</span><div class="an-mv">${mv}<span class="mut">· depth ${r.depth}${AN.run ? ' …' : ''}</span></div>`);
-  svg.innerHTML = anArrow(ucis[0].slice(0, 2), ucis[0].slice(2, 4), '#4da3ff', .9, 1.7);
-}
-function anStart() {
-  if (!cur) return;
-  AN.msg0 = $('#msg').textContent; AN.cls0 = $('#msg').className.replace('msg', '').trim();
-  AN.n = 0; AN.logLen = log.length; AN.last0 = last; AN.top = AN.cmp = null;                // remember the puzzle position so it can be restored
-  AN.on = true; clearTimeout(autoT); voiceTok++; if (voiceAudio) voiceAudio.pause();      // stop auto-next and any voice
-  sel = fbSq = null; targets = []; promoMove = null; $('#promo').classList.add('hidden');
-  $('#bAna').classList.add('on'); $('#anLine').classList.remove('off');
-  msg('Analysis mode');
-  draw(); AN.info = null; anDraw(); anRequest();
-}
-function anStop() {                                      // leave analysis mode (the board is NOT touched here)
-  AN.on = false; clearTimeout(AN.t); AN.want = false; if (AN.sf && AN.run) { AN.ign = true; AN.sf.postMessage('stop'); }
-  AN.info = AN.top = AN.cmp = null; AN.fen = '';
-  $('#bAna').classList.remove('on'); $('#anArrows').innerHTML = ''; $('#anLine').innerHTML = ''; $('#anLine').classList.add('off');
-}
-function anExit() {                                      // 2nd click on Analysis: take back all test moves and carry on with the puzzle
-  while (AN.n > 0) { game.undo(); AN.n--; }
-  log.length = AN.logLen; last = AN.last0; sel = null; targets = [];
-  anStop();
-  if (done) msg('Solved – press Next for the next puzzle.', 'ok'); else msg(AN.msg0, AN.cls0);
-  draw();
-  if (busy && !done) {                                   // the opponent's reply (or the final step) was still waiting when analysis started
-    if (game.in_checkmate() || (tree ? !node.kids.length : step >= sol.length)) finish(); else reply();
-  }
-}
-function anUndo() {
-  if (!AN.n) return;
-  game.undo(); AN.n--; log.pop(); AN.cmp = null; sel = null; targets = [];
-  const h = game.history({ verbose: true }); last = h.length ? h[h.length - 1] : null;
-  draw(); AN.info = null; anDraw(); anRequest();
-}
-function anClick(sq) {
-  if (sel && sel !== sq) {
-    const prev = AN.info && AN.top && AN.fen === game.fen() ? { ...AN.top } : null;       // engine's best move BEFORE this move
-    const mv = game.move({ from: sel, to: sq, promotion: 'q' });
-    if (mv) {
-      AN.cmp = prev ? { col: mv.color, played: mv.san, best: prev.san, bestEv: prev.ev, same: prev.uci === mv.from + mv.to + (mv.promotion || '') } : null;
-      AN.n++; last = mv; log.push(mv.san); sel = null; targets = []; moveSound(mv); draw(); AN.info = null; anDraw(); anRequest(); return;
-    }
-  }
-  const pc = game.get(sq); sel = pc && pc.color === game.turn() ? sq : null;
-  targets = sel ? game.moves({ square: sq, verbose: true }).map(m => m.to) : []; draw();
-}
-$('#anLine').onclick = e => { if (e.target.closest('#anUndo')) anUndo(); };
-$('#bAna').onclick = () => { if (!cur) return; if (AN.on) anExit(); else anStart(); };
-
-/* ---------- list ---------- */
-const _k = new WeakMap();
-const catOf = p => { let k = _k.get(p); if (k === undefined) { k = +((p.category || '').match(/\d+/) || [0])[0]; _k.set(p, k); } return k; }; const picked = new Set();                                                 // admin: puzzles ticked for bulk delete
-let minElo = 0, maxElo = 0;                                               // rating filter (Lichess puzzles carry a rating)
-const filtered = () => puzzles.filter(p => (!catK || catOf(p) === catK)
-  && (!(minElo || maxElo) || ((p.rating || 0) > 0 && (p.rating || 0) >= minElo && (!maxElo || p.rating <= maxElo))));
-const eloText = () => minElo || maxElo ? `rating ${minElo || 0}${maxElo ? '–' + maxElo : '+'}` : '';
-function renderList() {
-  $('#cats').innerHTML = CATS.map(c => `<div class="cat ${c.k === catK ? 'on' : ''}" data-k="${c.k}"><img src="${c.img}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('b'),{textContent:'${c.k || '∞'}'}))">${c.label}</div>`).join('');
-  const all = filtered(), pages = Math.max(1, Math.ceil(all.length / PER)); page = Math.max(0, Math.min(page, pages - 1));
-  $('#list').innerHTML = all.slice(page * PER, page * PER + PER).map(p => `<div class="pcard ${cur && cur.id === p.id ? 'on' : ''}" data-id="${p.id}"><div><b>#${p.id} · ${esc(p.category || '')}</b><br><small>${esc(p.white)} vs ${esc(p.black)} · ${esc(p.date || '')}</small></div>
-    <div>${prog.s.includes(p.id) ? '<span class="tick">✔</span>' : ''}${isAdmin ? `<span class="adm"><input type="checkbox" data-s="${p.id}" ${picked.has(p.id) ? 'checked' : ''}><button data-e="${p.id}">✎</button><button data-x="${p.id}">✕</button></span>` : ''}</div></div>`).join('') || `<p class="mut">${minElo || maxElo ? 'No puzzles with ' + eloText() + ' in this category.' : 'No puzzles yet.'}</p>`;
-  const ci = cur ? all.findIndex(p => p.id === cur.id) : -1;
-  $('#pager').innerHTML = `<button data-nav="-1" ${ci > 0 ? '' : 'disabled'}>‹ Prev</button>${pagerMid(ci, all.length)}<button data-nav="1" ${ci < all.length - 1 ? '' : 'disabled'}>Next ›</button>`;
-}
-$('#pager').onclick = e => {
-  const b = e.target.closest('[data-nav]'); if (!b) return;
-  const l = filtered(), i = (cur ? l.findIndex(p => p.id === cur.id) : -1) + +b.dataset.nav; if (l[i]) open(l[i]);
-};
-$('#cats').onclick = e => { const c = e.target.closest('.cat'); if (c) { catK = +c.dataset.k; page = 0; const f = filtered()[0]; if (f) open(f, true); else renderList(); } };
-/* custom dropdowns (instead of the browser's native select popup) */
-const closeDd = () => document.querySelectorAll('.dd-menu').forEach(m => m.classList.add('hidden'));
-document.addEventListener('click', closeDd); document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDd(); });
-function enhanceSelect(sel) {
-  const w = document.createElement('span'), btn = document.createElement('button'), menu = document.createElement('ul');
-  w.className = 'dd'; btn.type = 'button'; btn.className = 'dd-btn'; menu.className = 'dd-menu hidden';
-  menu.innerHTML = [...sel.options].map((o, i) => `<li data-i="${i}">${esc(o.text)}</li>`).join('');
-  sel.before(w); w.append(btn, menu, sel); sel.style.display = 'none';
-  const sync = () => { btn.textContent = sel.options[sel.selectedIndex]?.text || '';[...menu.children].forEach((li, i) => li.classList.toggle('on', i === sel.selectedIndex)); };
-  btn.onclick = e => { e.stopPropagation(); const open = menu.classList.contains('hidden'); closeDd(); if (open) menu.classList.remove('hidden'); };
-  menu.onclick = e => {
-    e.preventDefault(); e.stopPropagation(); const li = e.target.closest('li'); if (!li) return;
-    sel.selectedIndex = +li.dataset.i; sync(); menu.classList.add('hidden'); sel.dispatchEvent(new Event('change'));
-  };
-  sel._sync = sync; sync();
-}
-['#dCat', '#dSrc'].forEach(q => enhanceSelect($(q)));
-
-/* rating slider: A = lowest point, B = highest point; limits are the lowest / highest rated puzzle that exists */
-const eloA = $('#eloA'), eloB = $('#eloB');
-let eloLo = 0, eloHi = 0;
-function paintElo() {
-  const a = +eloA.value, b = +eloB.value, span = Math.max(1, eloHi - eloLo);
-  $('#rsFill').style.left = (a - eloLo) / span * 100 + '%'; $('#rsFill').style.width = (b - a) / span * 100 + '%';
-  $('#eloTxt').textContent = a <= eloLo && b >= eloHi ? 'Any rating' : `${a} – ${b}`;
-  eloA.style.zIndex = a > eloLo + span / 2 ? 4 : 3;                         // when both thumbs meet, the one that can still move stays on top
-}
-function setupElo() {
-  let lo = 0, hi = 0;
-  for (const p of puzzles) { const r = p.rating || 0; if (r > 0) { lo = lo ? Math.min(lo, r) : r; hi = Math.max(hi, r); } }
-  eloLo = lo; eloHi = hi; $('#eloBox').classList.toggle('hidden', !hi);
-  for (const el of [eloA, eloB]) { el.min = lo; el.max = hi; el.step = 1; }
-  eloA.value = minElo ? Math.max(lo, Math.min(minElo, hi)) : lo; eloB.value = maxElo ? Math.min(hi, Math.max(maxElo, lo)) : hi;
-  $('#eloLo').textContent = lo; $('#eloHi').textContent = hi; paintElo();
-}
-function applyElo() {
-  const a = +eloA.value, b = +eloB.value;
-  minElo = a > eloLo ? a : 0; maxElo = b < eloHi ? b : 0; page = 0; paintElo();
-  const f = filtered()[0]; if (f) open(f, true); else { renderList(); msg(`No puzzles with ${eloText()} here – move the slider or change category.`, 'err'); }
-}
-eloA.oninput = () => { if (+eloA.value > +eloB.value) eloA.value = eloB.value; paintElo(); };
-eloB.oninput = () => { if (+eloB.value < +eloA.value) eloB.value = eloA.value; paintElo(); };
-eloA.onchange = eloB.onchange = applyElo;                                   // load a puzzle when the thumb is released
-$('#eloReset').onclick = () => { eloA.value = eloLo; eloB.value = eloHi; applyElo(); };
-$('#list').onclick = async e => {
-  const p = id => puzzles.find(x => x.id === +id);
-  if (e.target.dataset.s) { const i = +e.target.dataset.s; e.target.checked ? picked.add(i) : picked.delete(i); return delUi(); }
-  if (e.target.dataset.x) { if (!fbIds.has(+e.target.dataset.x)) return alert('This puzzle comes from the GitHub file (' + PUZ_FILE.slice(2) + ') – remove it there.'); if (confirm('Delete puzzle #' + e.target.dataset.x + '?')) await F.remove(F.ref(db, 'puzzles/' + e.target.dataset.x)); return; }
-  if (e.target.dataset.e) { const pz = p(e.target.dataset.e); analysis.loadPuzzle(pz); return; }
-  const c = e.target.closest('.pcard'); if (c) open(p(c.dataset.id), true);
-};
-
-/* ---------- admin: parse + validate ---------- */
-/* ---------- Lichess puzzle DB (CSV rows) ➜ our puzzle format ----------
-   Lichess row: PuzzleId,FEN,Moves,Rating,RatingDeviation,Popularity,NbPlays,Themes,GameUrl,OpeningTags
-   Lichess FEN is the position BEFORE the opponent's last move: Moves[0] is played automatically, the solver then plays Moves[1], Moves[2]... (UCI). */
-const isLichessCsv = t => /^[\w-]{3,8},[^,\s]+\/[^,]+,[a-h][1-8][a-h][1-8]/m.test(t);
-const uci = m => ({ from: m.slice(0, 2), to: m.slice(2, 4), promotion: m[4] || undefined });
-function lichessRow(line, have, takeId) {
-  const c = line.trim().split(',');
-  if (c.length < 8 || !/^[a-h][1-8][a-h][1-8]/.test(c[2])) return null;
-  const [lid, fen, mv, rating, , , , themes, url] = c;
-  const g = new Chess(fen), m = mv.trim().split(/\s+/);
-  if (!g.move(uci(m.shift()))) return null;
-  const start = g.fen(), sol = [];
-  for (const u of m) { const x = g.move(uci(u)); if (!x) return null; sol.push(x.san); }
-  if (!sol.length) return null;
-  const mate = (themes.match(/mateIn(\d)/) || [])[1], side = start.split(' ')[1] === 'w' ? 'White' : 'Black';
-  if (mate && Math.ceil(sol.length / 2) !== +mate) return null;       // Lichess "mateIn5" = 5 or MORE -> skip the longer ones
-  return {
-    id: have.get(lid) ?? takeId(), date: 'Rating ' + rating, white: 'Unknown', black: 'Unknown', result: '', fen: start, solution: sol,
-    category: mate ? 'Mate in ' + mate : 'Tactic',
-    description: `${side} to move${mate ? ' and mate in ' + mate : ' – find the best moves'}.`,
-    lichess: lid, rating: +rating || 0, themes, url: url || ''
-  };
-}
-const lichessIds = () => new Map(puzzles.filter(p => p.lichess).map(p => [p.lichess, p.id]));
-function fromLichess(t) {
-  const out = [], have = lichessIds(); let id = nextId();
-  for (const line of t.split(/\r?\n/)) { const p = lichessRow(line, have, () => id++); if (p) out.push(p); }
-  if (!out.length) throw Error('No new Lichess puzzles found in that text.');
-  return out;
-}
-async function fromLichessAsync(t, onProgress) {
-  const lines = t.split(/\r?\n/), out = [], have = lichessIds(); let id = nextId();
-  for (let i = 0; i < lines.length; i++) {
-    const p = lichessRow(lines[i], have, () => id++); if (p) out.push(p);
-    if (i % 500 === 499) { if (onProgress) onProgress(i + 1, lines.length, out.length); await new Promise(r => setTimeout(r)); }
-  }
-  if (!out.length) throw Error('No Lichess puzzles found in that file.');
-  return out;
-}
-function parsePuzzles(t) {
-  if (isLichessCsv(t)) return fromLichess(t);
-  t = t.replace(/```\w*/g, '').replace(/^\s*(?:export\s+)?(?:const|let|var)\s+\w+\s*=\s*/, '').replace(/;\s*$/, '').trim();
-  try { const j = JSON.parse(t); return Array.isArray(j) ? j : [j]; } catch { /* JS-style object syntax */ }   // strict JSON first (URLs contain "//")
-  t = t.replace(/\/\/.*$/gm, '').trim();
-  const j = t.replace(/([{,]\s*)([A-Za-z_]\w*)\s*:/g, '$1"$2":').replace(/,(\s*[\]}])/g, '$1').replace(/,\s*$/, '');
-  return JSON.parse(j.startsWith('[') ? j : '[' + j + ']');
-}
-const nextId = () => puzzles.reduce((m, p) => Math.max(m, p.id), 0) + 1;
-function validate(p) {
-  let sl = p.solution, pgn = '';
-  if (p.pgn) { const t = parseTree(p.pgn); if (!t.kids.length) throw Error('Empty pgn line in puzzle ' + (p.id || '(new)')); sl = mainLine(t); pgn = String(p.pgn).trim(); }
-  if (!p.fen || !Array.isArray(sl) || !sl.length) throw Error('Each puzzle needs "fen" and "solution" (or "pgn").');
-  const g = new Chess(); if (!g.load(p.fen)) throw Error('Bad FEN: ' + p.fen);
-  const turn = g.turn();
-  if (pgn) try { checkTree(parseTree(pgn), g); } catch (e) { throw Error(`${e.message} (puzzle ${p.id || 'new'})`); }
-  for (const m of sl) if (!g.move(m, { sloppy: true })) throw Error(`Illegal move "${m}" in puzzle ${p.id || '(new)'}`);
-  const n = Math.ceil(sl.length / 2), mate = g.in_checkmate();
-  const out = {
-    id: +p.id || nextId(), date: String(p.date || ''), white: p.white || '?', black: p.black || '?', result: p.result || '', fen: p.fen, solution: sl,
-    description: p.description || `${turn === 'w' ? 'White' : 'Black'} moves and wins${mate ? ' in ' + n : ''}.`, category: p.category || (mate ? 'Mate in ' + n : 'Tactic')
-  };
-  if (pgn) out.pgn = pgn;
-  if (p.lichess) Object.assign(out, { lichess: p.lichess, rating: p.rating || 0, themes: p.themes || '', url: p.url || '' });
-  if (p.alternatives) { out.alternatives = {}; for (const k in p.alternatives) out.alternatives[k === 'first_move' ? k : norm(k)] = p.alternatives[k]; }
-  return out;
-}
-const amsg = (t, c) => { $('#amsg').textContent = t; $('#amsg').className = 'msg ' + (c || ''); };
-/* ---------- admin: bulk delete ---------- */
-const delUi = () => { const b = $('#dSel'); if (b) b.textContent = `Delete ticked (${picked.size})`; };
-async function removeIds(ids, label) {
-  if (!isAdmin) return amsg('Admin login required.', 'err');
-  const del = ids.filter(id => fbIds.has(id)), fileOnly = ids.length - del.length;     // puzzles that come from the GitHub file can't be deleted here
-  if (!del.length) return amsg(fileOnly ? `These ${fileOnly} puzzle(s) come from ${PUZ_FILE.slice(2)} on GitHub – remove them by editing that file.` : 'Nothing to delete.', 'err');
-  if (!confirm(`Delete ${del.length} puzzle(s) from Firebase${label ? ' – ' + label : ''}? This cannot be undone.`)) return;
-  try {
-    for (let i = 0; i < del.length; i += 500) { const up = {}; del.slice(i, i + 500).forEach(id => up[id] = null); await F.update(F.ref(db, 'puzzles'), up); }
-    ids.forEach(id => picked.delete(id)); delUi();
-    amsg(`✔ Deleted ${del.length} puzzle(s) from Firebase.` + (fileOnly ? ` ${fileOnly} come from the GitHub file and were skipped.` : ''), 'ok');
-  } catch (e) { amsg('✖ ' + e.message, 'err'); }
-}
-$('#dSel').onclick = () => removeIds([...picked], 'ticked ones');
-$('#dAll').onclick = () => { filtered().forEach(p => picked.add(p.id)); renderList(); delUi(); amsg(`Ticked ${picked.size} puzzle(s) in the current category.`, 'ok'); };
-$('#dNone').onclick = () => { picked.clear(); renderList(); delUi(); };
-if ($('#dBad')) $('#dBad').onclick = () => removeIds(fbList.filter(p => !isGoodMate(p)).map(p => p.id), 'wrong mate length / Mate in 6+');
-$('#dGo').onclick = () => {
-  const k = +$('#dCat').value, src = $('#dSrc').value, n = Math.max(0, +$('#dNum').value || 0);
-  let l = puzzles.filter(p => (!k || catOf(p) === k) && (src === 'all' || p.lichess)).sort((x, y) => y.id - x.id);
-  if (n) l = l.slice(0, n);
-  removeIds(l.map(p => p.id), `${src === 'all' ? 'all sources' : 'Lichess only'}, ${k ? 'Mate in ' + k : 'all categories'}${n ? ', newest ' + n : ''}`);
-};
-async function savePuzzles(list) {
-  if (!isAdmin) return amsg('Admin login required.', 'err');
-  const ok = [], bad = [], used = new Set(); let n = nextId();
-  for (const raw of list) { try { const p = validate(raw); if (used.has(p.id)) p.id = n++; used.add(p.id); ok.push(p); } catch (e) { bad.push(`#${raw && raw.id}: ${e.message}`); } }
-  if (!ok.length) return amsg('✖ ' + (bad[0] || 'Nothing to save.'), 'err');
-  try {
-    const up = {}; ok.forEach(p => up[p.id] = p); await F.update(F.ref(db, 'puzzles'), up);
-    amsg(`✔ Saved ${ok.length} puzzle(s).` + (bad.length ? ` Skipped ${bad.length}: ` + bad.slice(0, 5).join(' | ') : ''), bad.length ? 'err' : 'ok');
-  }
-  catch (e) { amsg('✖ ' + e.message + (/permission/i.test(e.message) ? ' (check database rules + /admins/<UID> – see README)' : ''), 'err'); }
-}
-/* admin: download the database puzzles (honours the category + rating currently chosen; none chosen = everything)
-   in the same format the Import button reads (puzzles-seed.js style) */
-function downloadAll() {
-  const l = [...filtered()].sort((x, y) => x.id - y.id); if (!l.length) return { n: 0 };
-  const name = 'puzzles-database' + (catK ? '-mate' + catK : '') + (minElo || maxElo ? '-r' + minElo + '-' + (maxElo || 'max') : '') + '.js';
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob(['export const SEED = ' + JSON.stringify(l, null, 1) + ';\n'], { type: 'text/javascript' })); a.download = name;
-  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
-  return { n: l.length, name };
-}
-/* ---------- Lichess database (.csv or .csv.zst, any size)  ➜  puzzles file for GitHub ----------
-   The file is streamed piece by piece (and unpacked on the fly for .zst), so a 1 GB+ database never has to fit in memory. */
-const ZSTD_URL = 'https://cdn.jsdelivr.net/npm/fzstd@0.1.1/+esm';           // small .zst unpacker, loaded only when you pick a .zst file
-let loadZstd = () => import(ZSTD_URL);
-async function readLichessRows(f, onRow, onProgress) {
-  const zst = /\.zst$/i.test(f.name), td = new TextDecoder(); let tail = '', rows = 0, read = 0, tick = 0;
-  const feed = bytes => {
-    const parts = (tail + td.decode(bytes, { stream: true })).split('\n'); tail = parts.pop();
-    for (const l of parts) { rows++; onRow(l.endsWith('\r') ? l.slice(0, -1) : l); }
-  };
-  let zd = null;
-  if (zst) { const { Decompress } = await loadZstd(); zd = new Decompress(chunk => feed(chunk)); }
-  const reader = f.stream().getReader(); let prev = null;
-  for (; ;) {
-    const { done, value } = await reader.read();
-    if (value) read += value.length;
-    if (prev) { if (zd) zd.push(prev, done); else feed(prev); }                // one chunk is held back so the LAST one can be marked final
-    if (done) break;
-    prev = value;
-    if (read - tick > 8e6) { tick = read; onProgress(read, rows); await new Promise(r => setTimeout(r)); }
-  }
-  tail += td.decode(); if (tail.trim()) { rows++; onRow(tail.replace(/\r$/, '')); }
-  return rows;
-}
-async function makeLichessFile(f, onProgress) {
-  const tell = t => { amsg(t); if (onProgress) onProgress(t); };
-  try {
-    const ans = prompt('How many puzzles should the file have?\n(500000 = 5 lakh. Only Mate in 1-5, most popular first. A bigger file loads slower on phones.)', '500000');
-    if (ans === null) { tell('Cancelled.'); return { n: 0 }; }
-    const T = Math.floor(+String(ans).replace(/[,_\s]/g, '')); if (!(T > 0)) throw Error('Please type a number, for example 500000.');
-
-    // 1) read the database: keep the mate puzzles of every category (most popular first)
-    let keep = { 1: [], 2: [], 3: [], 4: [], 5: [] }; const seen = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
-    tell('Reading ' + f.name + '…');
-    const rows = await readLichessRows(f, line => {
-      const c = line.split(','); if (c.length < 8) return;
-      const m = c[7].match(/mateIn([1-5])/); if (!m) return;
-      const a = keep[m[1]]; seen[m[1]]++; a.push({ pop: +c[5] || 0, line });
-      if (a.length > T * 2) { a.sort((x, y) => y.pop - x.pop); a.length = T; }
-    }, (read, n) => tell(`Reading ${f.name}… ${(read / 1048576).toFixed(0)} / ${(f.size / 1048576).toFixed(0)} MB (${n.toLocaleString()} rows) – keep this tab open`));
-
-    // 2) pick T puzzles, shared evenly between Mate in 1..5 (a category that has fewer gives its share to the others)
-    for (const k in keep) keep[k].sort((x, y) => y.pop - x.pop);
-    const take = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }; let left = Math.min(T, Object.values(keep).reduce((s, a) => s + a.length, 0));
-    while (left > 0) {
-      const open = Object.keys(keep).filter(k => take[k] < keep[k].length); if (!open.length) break;
-      const share = Math.max(1, Math.floor(left / open.length));
-      for (const k of open) { const n = Math.min(share, keep[k].length - take[k], left); take[k] += n; left -= n; if (left <= 0) break; }
-    }
-    const lines = []; for (const k in keep) lines.push(...keep[k].slice(0, take[k]).map(x => x.line));
-    keep = null;
-    if (!lines.length) throw Error('No mate puzzles found in that file – is it lichess_db_puzzle.csv(.zst)? (' + rows.toLocaleString() + ' rows read)');
-    lines.sort((a, b) => { const x = a.slice(0, a.indexOf(',')), y = b.slice(0, b.indexOf(',')); return x < y ? -1 : x > y ? 1 : 0; });
-
-    // 3) convert (ids of puzzles you already have are kept, new ones continue after the highest id)
-    const have = lichessIds(), list = []; let id = nextId();
-    for (let i = 0; i < lines.length; i++) {
-      if (have.has(lines[i].slice(0, lines[i].indexOf(',')))) continue; const p = lichessRow(lines[i], have, () => id++); if (p) list.push(p);
-      if (i % 500 === 499) { tell(`Converting… ${(i + 1).toLocaleString()} / ${lines.length.toLocaleString()} puzzles – keep this tab open`); await new Promise(r => setTimeout(r)); }
-    }
-    if (!list.length) throw Error('No puzzles could be converted.');
-    list.sort((x, y) => x.id - y.id);
-
-    // 4) download  "<how many>-puzzles.js"
-    const parts = ['export const SEED = [\n'];
-    for (let i = 0; i < list.length; i += 5000)
-      parts.push(list.slice(i, i + 5000).map(p => '  ' + JSON.stringify({ id: p.id, fen: p.fen, solution: p.solution, lichess: p.lichess, rating: p.rating, category: p.category })).join(',\n') + (i + 5000 < list.length ? ',\n' : '\n'));
-    parts.push('];\n');
-    const blob = new Blob(parts, { type: 'text/javascript' }), name = list.length + '-puzzles.js', mb = blob.size / 1048576;
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
-    tell(`⬇ Done: ${name} – ${list.length.toLocaleString()} puzzles, ${mb.toFixed(1)} MB. Rename it to puzzles-lichess.js, put it in your GitHub repo and raise PUZ_VER in app.js by 1.` + (mb > 95 ? ' ⚠ GitHub refuses files over 100 MB – use fewer puzzles.' : mb > 50 ? ' ⚠ Over 50 MB: GitHub warns and the site loads slower.' : ''));
-    return { n: list.length };
-  } catch (err) { tell('✖ ' + err.message); return { n: 0 }; }
-}
-async function importFile(f) {                                              // used by the Analysis board "Import" button
-  try { const list = parsePuzzles(await f.text()); amsg(`Read ${list.length} puzzle(s) from ${f.name} – saving...`, 'ok'); await savePuzzles(list); }
-  catch (err) { amsg('✖ Could not read file: ' + err.message, 'err'); }
-}
-
-/* ---------- Firebase auth ---------- */
-const renderAdmin = () => { $('#admin').classList.toggle('hidden', !isAdmin); $('#btnLogin').textContent = isAdmin ? 'Admin ✔' : 'Admin'; analysis.onAdmin(isAdmin); };
-$('#btnLogin').onclick = () => {
-  if (isAdmin) return $('#admin').scrollIntoView({ behavior: 'smooth' });
-  if (!FB) return alert('Add your Firebase apiKey/appId in config.js first (see README).'); $('#dlg').showModal();
-};
-// Admin button is hidden (see style.css) -> tap / click the logo 3 times quickly to open the same admin action
-(() => {
-  let taps = 0, timer = null;
-  $('.brand').addEventListener('click', () => {
-    taps++; clearTimeout(timer); timer = setTimeout(() => { taps = 0; }, 700);
-    if (taps >= 3) { taps = 0; clearTimeout(timer); $('#btnLogin').onclick(); }
-  });
-})();
-$('#lCancel').onclick = () => $('#dlg').close();
-const lmsg = (t, c = 'err') => { $('#lMsg').textContent = t; $('#lMsg').className = 'msg ' + c; };
-$('#lGo').onclick = async e => {
-  e.preventDefault();
-  try {
-    await F.signInWithEmailAndPassword(auth, $('#lEmail').value, $('#lPass').value); $('#dlg').close(); $('#lPass').value = ''; lmsg('', '');
-    setTimeout(() => !isAdmin && alert('Logged in, but this account is not in /admins.'), 1200);
-  }
-  catch (err) {
-    lmsg(/network/.test(err.code) ? 'Network error.' : /unauthorized-domain/.test(err.code) ? 'Add this domain in Firebase > Authentication > Settings > Authorized domains.'
-      : /operation-not-allowed/.test(err.code) ? 'Enable Email/Password sign-in in Firebase.' : 'Wrong email or password.');
-  }
-};
-$('#lForgot').onclick = async () => {
-  const em = $('#lEmail').value.trim(); if (!em) return lmsg('Type your email first.');
-  try { await F.sendPasswordResetEmail(auth, em); lmsg('Reset email sent – check your inbox.', 'ok'); } catch { lmsg('Could not send reset email.'); }
-};
-$('#bLogout').onclick = () => F.signOut(auth);
-
-async function initFirebase() {
-  if (!FB) return;
-  const [app, A, D] = await Promise.all(['app', 'auth', 'database'].map(m => import(`${CDN}/firebase-${m}.js`)));
-  const a = app.initializeApp(firebaseConfig); auth = A.getAuth(a); db = D.getDatabase(a); F = { ...A, ...D };
-  D.onValue(D.ref(db, 'puzzles'), s => {
-    const v = s.val();
-    if (v) { fbList = Object.entries(v).filter(([, p]) => p && p.fen).map(([k, p]) => ({ ...p, id: +(p.id ?? k), ...(p.lichess ? { white: 'Unknown', black: 'Unknown' } : {}) })).sort((x, y) => x.id - y.id); fbIds = new Set(fbList.map(p => p.id)); } else fbIds = new Set();
-    rebuild();
-    renderList();
-    if (wantId && cur && cur.id !== wantId && !step) { const w = puzzles.find(x => x.id === wantId); if (w) open(w); }
-    wantId = 0; if ($('#qSearch').value.trim()) runSearch();
-  },
-    err => { console.error(err); if (!cur) msg('⚠ Could not load puzzles from Firebase (' + err.message + ') – showing built-in puzzles.', 'err'); });
-  A.onAuthStateChanged(auth, async u => {
-    isAdmin = false;
-    if (u && !u.isAnonymous) try { isAdmin = (await D.get(D.ref(db, 'admins/' + u.uid))).val() === true; } catch { /* not admin */ }
-    renderAdmin(); renderList();
-  });
-}
-
-/* ---------- search by ID or player name ---------- */
-const fold = s => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-const hay = p => fold([p.id, p.white, p.black, p.date, p.result, p.category, p.description].join(' '));
-function runSearch() {
-  const box = $('#qRes'), q = fold($('#qSearch').value).trim();
-  if (!q) { box.classList.add('hidden'); box.innerHTML = ''; return; }
-  const toks = q.split(/\s+/).map(t => t.replace(/^#/, '')).filter(Boolean);
-  const hits = puzzles.filter(p => { const h = hay(p); return toks.every(t => h.includes(t)); })
-    .sort((a, b) => (toks.includes(String(b.id)) - toks.includes(String(a.id))) || a.id - b.id);
-  box.innerHTML = hits.length
-    ? hits.slice(0, 50).map(p => `<div class="qi" data-id="${esc(p.id)}"><b>#${esc(p.id)} · ${esc(p.category || '')}</b><br><small>${esc(p.white)} vs ${esc(p.black)} · ${esc(p.date || '')} · ${esc(p.result || '')}</small></div>`).join('')
-    + (hits.length > 50 ? `<div class="qnone">Showing 50 of ${hits.length} – refine your search.</div>` : '')
-    : '<div class="qnone">No puzzle found.</div>';
-  box.classList.remove('hidden');
-}
-$('#qSearch').oninput = runSearch;
-$('#qSearch').onkeydown = e => { if (e.key === 'Enter') runSearch(); };
-$('#qGo').onclick = runSearch;
-$('#qClear').onclick = () => { $('#qSearch').value = ''; runSearch(); };
-$('#qRes').onclick = e => {
-  const c = e.target.closest('.qi'); if (!c) return;
-  const p = puzzles.find(x => x.id === +c.dataset.id); if (p) { catK = 0; open(p, true); $('#qRes').classList.add('hidden'); }
-};
-
-/* ---------- chess.com board + piece themes ---------- */
-/* page theme = dark shade of the selected board's dark-square colour */
-function hslOf(hex) {
-  const n = parseInt(hex.slice(1), 16), r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255,
-    mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn; let h = 0;
-  if (d) { h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4; h = (h * 60 + 360) % 360; }
-  const l = (mx + mn) / 2; return [h, d ? d / (1 - Math.abs(2 * l - 1)) * 100 : 0];
-}
-function applyTheme(hex) {
-  const [h, s] = hslOf(hex), set = (k, v) => document.documentElement.style.setProperty(k, v), c = (sat, l) => `hsl(${h.toFixed(0)},${sat.toFixed(0)}%,${l}%)`;
-  const sat = Math.min(s, 45), as = Math.max(35, Math.min(s, 65));
-  set('--bg', c(sat * .8, 7)); set('--card', c(sat * .55, 11)); set('--glow', c(sat, 17)); set('--hl', c(sat * .8, 16));
-  set('--g', c(as, 56)); set('--g1', c(as, 66)); set('--g2', c(as, 46));
-}
-function applyBoard() {
-  const b = BOARDS.find(x => x.k === cfg.board) || BOARDS[0], el = $('#board'), root = document.documentElement.style;
-  const colors = (l, d) => { root.setProperty('--l', l); root.setProperty('--d', d); el.classList.remove('img'); el.style.backgroundImage = ''; };
-  if (b.img) {
-    colors('#eeeed2', '#769656');                                          // plain board shows instantly while the picture loads
-    const url = `${CC}/boards/${b.img}/150.png`, im = new Image();
-    im.onload = () => { if (cfg.board === b.k) { el.style.backgroundImage = `url(${url})`; el.classList.add('img'); } };
-    im.onerror = () => { if (cfg.board === b.k) colors('#eeeed2', '#769656'); };
-    im.src = url;
-  } else colors(b.l, b.d);
-  applyTheme(b.a || b.d);
-  $('#curBoard').textContent = b.n;
-  const th = {};['--bg', '--card', '--glow', '--hl', '--g', '--g1', '--g2'].forEach(k => th[k] = root.getPropertyValue(k));
-  const ld = { k: b.k, l: b.l || '', d: b.d || '', a: b.a || '', img: b.img ? `${CC}/boards/${b.img}/150.png` : '', th };   // loader (index.html) reads this on the next visit
-  try { localStorage.cp4uLd = JSON.stringify(ld); } catch { }
-  if (window.cpLd) window.cpLd(ld);                                                                                  // and updates live if the loader is still showing
-}
-function renderSettings() {
-  $('#boardOpts').innerHTML = BOARDS.map(b => `<button type="button" class="opt ${b.k === cfg.board ? 'on' : ''}" data-b="${b.k}" title="${b.n}">${b.img ? `<img src="${CC}/boards/_previews_/square/${b.img}.png" alt="${b.n}">` : `<i style="background:conic-gradient(${b.l} 25%,${b.d} 0 50%,${b.l} 0 75%,${b.d} 0)"></i>`}</button>`).join('');
-  $('#pieceOpts').innerHTML = PIECES.map(p => `<button type="button" class="opt ${p.k === cfg.pieces ? 'on' : ''}" data-p="${p.k}" title="${p.n}"><img src="${PIECE_PREVIEW(p)}" alt="${p.n}"></button>`).join('');
-  $('#pieceOpts').classList.add('pcs');
-  $('#curPieces').textContent = (PIECES.find(p => p.k === cfg.pieces) || PIECES[0]).n;
-  $('#botOpts').innerHTML = BOTS.map(b => `<button type="button" class="opt ${b.k === cfg.bot ? 'on' : ''}" data-v="${b.k}" title="${b.n}">${b.img ? `<img src="${b.img}" alt="${b.n}">` : '<b>Off</b>'}</button>`).join('');
-  $('#curBot').textContent = (BOTS.find(b => b.k === cfg.bot) || BOTS[0]).n;
-
-  $('#sndTog').classList.toggle('on', cfg.sound);
-  $('#sndTog').setAttribute('aria-pressed', cfg.sound);
-  $('#sndIco').className = 'sndico ' + (cfg.sound ? 'on' : 'off');
-  $('#sndIco').innerHTML = cfg.sound
-    ? '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M3 9v6h4l5 4V5L7 9H3z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
-    : '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M3 9v6h4l5 4V5L7 9H3z"/><path d="M16 9l5 6M21 9l-5 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
-}
-$('#btnSet').onclick = () => { renderSettings(); $('#setDlg').showModal(); };
-$('#setClose').onclick = () => $('#setDlg').close();
-$('#setDlg').onclick = e => {
-  if (e.target.closest('#sndTog')) { cfg.sound = !cfg.sound; localStorage.cp4uSound = cfg.sound ? '1' : '0'; if (!cfg.sound && voiceAudio) voiceAudio.pause(); renderSettings(); return; }
-  const b = e.target.closest('[data-b]'), p = e.target.closest('[data-p]'), vb = e.target.closest('[data-v]');
-  if (vb) { cfg.bot = vb.dataset.v; localStorage.cp4uBot = cfg.bot; renderSettings(); }
-  if (b) { cfg.board = b.dataset.b; localStorage.cp4uBoard = cfg.board; applyBoard(); renderSettings(); analysis.refresh(); }
-  if (p) { cfg.pieces = p.dataset.p; localStorage.cp4uPieces = cfg.pieces; preloadPieces(); renderSettings(); if (game) draw(); analysis.refresh(); }
-};
-
-/* ---------- fit: on desktop the whole puzzle card (board + buttons) fits in one screen, no scrolling ---------- */
-function fitBoard() {
-  const root = document.documentElement.style, card = $('#solver'), wrap = $('.bwrap');
-  if (window.innerWidth <= 860) return root.removeProperty('--bs');          // phones/tablets: normal page scroll
-  const cs = getComputedStyle(card), ms = getComputedStyle($('main'));
-  const inner = card.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-  const an = $('#anLine');                                                    // engine box must not take space from the board
-  const anH = an && an.offsetParent ? an.offsetHeight + parseFloat(getComputedStyle(an).marginTop) : 0;
-  const other = card.offsetHeight - wrap.offsetHeight - anH;                  // everything in the card except the board + engine box
-  const room = window.innerHeight - $('header').offsetHeight - parseFloat(ms.paddingTop) - parseFloat(ms.paddingBottom) - other - 2;
-  root.setProperty('--bs', Math.max(260, Math.min(inner, Math.floor(room))) + 'px');
-}
-window.addEventListener('resize', fitBoard); window.addEventListener('orientationchange', () => setTimeout(fitBoard, 200));
-window.addEventListener('load', fitBoard); if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitBoard);
-
-/* ---------- turn pill (king of the chosen piece set) + share ---------- */
-const SITE = 'https://only-beats.github.io/ChessPuzzle4U/';
-
-$('#bShare').onclick = async () => {
-  if (!cur) return;
-  const text = `ChessPuzzle4U | Sharpen your Chess skills.\n${SITE}#${cur.id}`;
-  if (navigator.share) { try { await navigator.share({ text }); return; } catch (e) { if (e.name === 'AbortError') return; } }
-  try { await navigator.clipboard.writeText(text); }
-  catch { const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); try { document.execCommand('copy'); } catch { } ta.remove(); }
-  const b = $('#bShare'); b.title = 'Copied!'; setTimeout(() => b.title = '', 1500);
-};
-
-/* ---------- Analysis.js (admin board editor) ---------- */
-const analysis = initAnalysis({
-  PIECE, LICHESS, parseTree, validate, savePuzzles, nextId,
-  has: id => puzzles.some(p => p.id === id),
-  importFile, makeLichessFile, seed: () => savePuzzles(SEED), download: downloadAll,
-  current: () => cur,
-  status: () => ({ text: $('#amsg').textContent, cls: $('#amsg').className })
-});
-
-/* ---------- start ---------- */
-game = new Chess(); user = 'w'; flip = false; draw();                      // empty-puzzle start position so the board is never blank
-preloadPieces(); stats(); applyBoard(); renderList();
-{ const p = puzzles.find(x => x.id === wantId) || puzzles.find(x => !prog.s.includes(x.id)) || puzzles[0]; if (p) open(p); }
-fitBoard(); loadFilePuzzles(); const fbReady = initFirebase();
-initBattle({ $, ready: fbReady, getFB: () => ({ db, F, auth }), getPuzzles: () => puzzles, catOf, open, setBT: b => { BT = b; } });
-document.body.classList.remove('sk-on');                                   // skeleton off: the real page is ready
+</html>
