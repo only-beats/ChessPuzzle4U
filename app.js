@@ -75,22 +75,55 @@ const saveProg = () => { localStorage.cp4u = JSON.stringify(prog); stats(); };
    missing two days in a row resets it. Change STREAK_MAX_GAP to make it stricter / more forgiving:
    1 = must play every day, 2 = one missed day is OK (default), 3 = two missed days are OK ... */
 const STREAK_MAX_GAP = 2;
+const FLY_MS = 2000;       // how long the flame flies to the nav bar (ms)
 const dayKey = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
 const dayGap = (a, b) => { const p = s => Date.UTC(...s.split('-').map((n, i) => i === 1 ? n - 1 : +n)); return Math.round((p(b) - p(a)) / 864e5); };
 const liveStreak = () => (prog.day && dayGap(prog.day, dayKey()) <= STREAK_MAX_GAP) ? prog.streak : 0;   // too many missed days = 0
-function bumpStreak() {                                                    // call when a puzzle is solved
-  const t = dayKey(); if (prog.day === t) return;                          // already counted today
+function bumpStreak() {                                                    // call when a puzzle is solved; returns true if the streak just went up
+  const t = dayKey(); if (prog.day === t) return false;                    // already counted today
   const g = prog.day ? dayGap(prog.day, t) : 99;
   prog.streak = (g > 0 && g <= STREAK_MAX_GAP) ? (prog.streak || 0) + 1 : 1; prog.day = t;
+  return true;
 }
 const streakState = () => { const n = liveStreak(), paused = n > 0 && prog.day !== dayKey(); return { n, paused, icon: n === 0 ? 'fireG' : paused ? 'fireY' : 'fireR' }; };   // fireG = 0 / reset, fireY = paused, fireR = active
 const fireImg = (icon, cls) => `<img class="${cls}" src="svg/${icon}.svg" alt="streak" onerror="this.onerror=null;this.src='svg/fire.svg'">`;     // falls back to fire.svg if a file is missing
+let streakHold = null, lastShown = '';                                                     // old {n, icon} shown in the nav bar until the flying flame arrives
 const stats = () => {
-  const { n, icon } = streakState(), el = $('#stStreak');
+  const { n, icon } = streakHold || streakState(), el = $('#stStreak');
+  lastShown = n + icon;
   $('#stSolved').innerHTML = '<img class="sti" src="svg/checklist.svg" alt="solved"> ' + prog.s.length;
-  el.innerHTML = fireImg(icon, 'sti') + ' ' + n;
+  el.innerHTML = fireImg(icon, icon === 'fireY' ? 'sti tada-loop' : 'sti') + ' ' + n;   // fireY (paused) = tada animation again and again
   el.setAttribute('role', 'button'); el.tabIndex = 0; el.title = 'Tap to see your streak';
 };
+setInterval(() => { if (streakHold) return; const t = streakState(); if (t.n + t.icon !== lastShown) stats(); }, 60000);   // icon changes by itself after midnight (only redraws on a real change)
+
+/* ---------- streak goes up: a flame flies from the last (mating) move to the nav bar, then the number updates + one tada ---------- */
+function flyStreak(sq) {
+  let ended = false;
+  const end = () => {
+    if (ended) return; ended = true;
+    if (fl) fl.remove();
+    streakHold = null; stats();                                            // now show the new number + icon
+    const ic = $('#stStreak .sti');
+    if (ic) { ic.classList.add('tada-once'); ic.addEventListener('animationend', () => ic.classList.remove('tada-once'), { once: true }); }
+  };
+  const from = sq && document.querySelector('#board [data-sq="' + sq + '"]'), to = $('#stStreak .sti');
+  let fl = null;
+  if (!from || !to || matchMedia('(prefers-reduced-motion: reduce)').matches) return end();
+  const a = from.getBoundingClientRect(), b = to.getBoundingClientRect(), S = 44;
+  fl = document.createElement('img'); fl.className = 'fly'; fl.alt = ''; fl.src = 'svg/fireR.svg';
+  fl.onerror = () => { fl.onerror = null; fl.src = 'svg/fire.svg'; };
+  fl.style.cssText = 'left:' + (a.left + a.width / 2 - S / 2) + 'px;top:' + (a.top + a.height / 2 - S / 2) + 'px;width:' + S + 'px;height:' + S + 'px';
+  document.body.appendChild(fl);
+  if (cfg.sound) { try { new Audio('Audio/puzzle-correct.mp3').play().catch(() => { }); } catch { } }   // plays once when the flame starts flying
+  const dx = (b.left + b.width / 2) - (a.left + a.width / 2), dy = (b.top + b.height / 2) - (a.top + a.height / 2);
+  const an = fl.animate([
+    { transform: 'translate(0,0) scale(.3)', opacity: 0 },
+    { transform: 'translate(0,0) scale(1.3)', opacity: 1, offset: .25 },                       // pops up on the mating square
+    { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(' + (b.width / S) + ')', opacity: 1 }   // flies to the nav bar
+  ], { duration: FLY_MS, easing: 'cubic-bezier(.45,0,.25,1)', fill: 'forwards' });
+  an.onfinish = end; an.oncancel = end; setTimeout(end, FLY_MS + 1000);             // safety: never leave the old number stuck
+}
 
 /* ---------- notification (toast) + notify.mp3 : click the 🔥 + number ---------- */
 let toastT;
@@ -109,7 +142,7 @@ function showStreakInfo() {
   if (n === 0 && !prog.day) return toast(icon, 'No streak yet', 'Solve a puzzle today to start your daily streak.');
   if (n === 0) return toast(icon, 'Streak reset to 0', 'You missed 2 days in a row. Solve a puzzle today to start again.');
   if (paused) return toast(icon, `Streak paused · ${n} ${d}`, 'You missed a day. Solve a puzzle today to keep it going – miss another day and it resets to 0.');
-  toast(icon, `${n}-day streak`, 'You solved a puzzle today. Come back tomorrow to keep your streak growing.');
+  toast(icon, `${n} - Day Streak`, 'You solved a puzzle today. Come back tomorrow to keep your streak growing.');
 }
 document.addEventListener('click', e => { if (e.target.closest('#stStreak')) showStreakInfo(); });
 document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.closest && e.target.closest('#stStreak')) { e.preventDefault(); showStreakInfo(); } });
@@ -276,7 +309,10 @@ function finish() {
   const nx = nextInList();
   msg((wrong ? 'Solved!' : 'Perfect – solved without a mistake!') + (nx ? ' Loading next puzzle…' : 'End of this category!'), 'ok');
   if (!prog.s.includes(cur.id)) prog.s.push(cur.id);
-  bumpStreak(); saveProg(); renderList();
+  const oldStreak = streakState(), up = bumpStreak();
+  if (up) streakHold = oldStreak;                                          // nav bar keeps the old number until the flame arrives
+  saveProg(); renderList();
+  if (up) flyStreak(last && last.to);
   if (nx) { const id = cur.id; clearTimeout(autoT); autoT = setTimeout(() => { if (cur && cur.id === id && done) open(nx); }, 2500); }
 }
 
