@@ -66,12 +66,53 @@ const FB = !String(firebaseConfig.apiKey).startsWith('PASTE');
 let puzzles = [...SEED], db = null, auth = null, F = {}, isAdmin = false, catK = 0;
 let BT = null, cur, game, sol, alt, tree, node, autoT, page = 0, promoMove = null, step = 0, user, flip, last, sel, targets = [], wrong, busy, done, hintLvl, fbSq, fbIcon, log = [];
 let wantId = +location.hash.slice(1) || +localStorage.cp4uLast;
-let prog = JSON.parse(localStorage.cp4u || '{"s":[],"streak":0}');
+let prog = JSON.parse(localStorage.cp4u || '{"s":[],"streak":0,"day":""}');
+if (!prog.day) prog.streak = 0;                                            // old data had a "puzzles in a row" count: the daily streak starts fresh
 const saveProg = () => { localStorage.cp4u = JSON.stringify(prog); stats(); };
+
+/* ---------- daily streak (Chess.com style, saved in localStorage) ----------
+   Solve at least one puzzle per day. Missing ONE day is forgiven (streak is "paused"),
+   missing two days in a row resets it. Change STREAK_MAX_GAP to make it stricter / more forgiving:
+   1 = must play every day, 2 = one missed day is OK (default), 3 = two missed days are OK ... */
+const STREAK_MAX_GAP = 2;
+const dayKey = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const dayGap = (a, b) => { const p = s => Date.UTC(...s.split('-').map((n, i) => i === 1 ? n - 1 : +n)); return Math.round((p(b) - p(a)) / 864e5); };
+const liveStreak = () => (prog.day && dayGap(prog.day, dayKey()) <= STREAK_MAX_GAP) ? prog.streak : 0;   // too many missed days = 0
+function bumpStreak() {                                                    // call when a puzzle is solved
+  const t = dayKey(); if (prog.day === t) return;                          // already counted today
+  const g = prog.day ? dayGap(prog.day, t) : 99;
+  prog.streak = (g > 0 && g <= STREAK_MAX_GAP) ? (prog.streak || 0) + 1 : 1; prog.day = t;
+}
+const streakState = () => { const n = liveStreak(), paused = n > 0 && prog.day !== dayKey(); return { n, paused, icon: n === 0 ? 'fireG' : paused ? 'fireY' : 'fireR' }; };   // fireG = 0 / reset, fireY = paused, fireR = active
+const fireImg = (icon, cls) => `<img class="${cls}" src="svg/${icon}.svg" alt="streak" onerror="this.onerror=null;this.src='svg/fire.svg'">`;     // falls back to fire.svg if a file is missing
 const stats = () => {
+  const { n, icon } = streakState(), el = $('#stStreak');
   $('#stSolved').innerHTML = '<img class="sti" src="svg/checklist.svg" alt="solved"> ' + prog.s.length;
-  $('#stStreak').innerHTML = '<img class="sti" src="svg/fire.svg" alt="streak"> ' + prog.streak;
+  el.innerHTML = fireImg(icon, 'sti') + ' ' + n;
+  el.setAttribute('role', 'button'); el.tabIndex = 0; el.title = 'Tap to see your streak';
 };
+
+/* ---------- notification (toast) + notify.mp3 : click the 🔥 + number ---------- */
+let toastT;
+function toast(icon, title, text) {
+  let t = $('#toast');
+  if (!t) { t = document.createElement('div'); t.id = 'toast'; t.setAttribute('role', 'status'); t.addEventListener('click', () => t.classList.remove('show')); document.body.appendChild(t); }
+  t.innerHTML = fireImg(icon, 'ti') + `<div><b>${title}</b><span>${text}</span></div>`;
+  const h = document.querySelector('header');                          // ← add this line
+  t.style.top = ((h ? h.getBoundingClientRect().bottom : 47) + 3) + 'px';   // ← and this one: 8px below the nav bar's last line
+  t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');         // restart the slide-in animation
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 5000);
+  if (cfg.sound) { try { new Audio('Audio/notify.mp3').play().catch(() => { }); } catch { } }
+}
+function showStreakInfo() {
+  const { n, paused, icon } = streakState(), d = n === 1 ? 'day' : 'days';
+  if (n === 0 && !prog.day) return toast(icon, 'No streak yet', 'Solve a puzzle today to start your daily streak.');
+  if (n === 0) return toast(icon, 'Streak reset to 0', 'You missed 2 days in a row. Solve a puzzle today to start again.');
+  if (paused) return toast(icon, `Streak paused · ${n} ${d}`, 'You missed a day. Solve a puzzle today to keep it going – miss another day and it resets to 0.');
+  toast(icon, `${n}-day streak`, 'You solved a puzzle today. Come back tomorrow to keep your streak growing.');
+}
+document.addEventListener('click', e => { if (e.target.closest('#stStreak')) showStreakInfo(); });
+document.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && e.target.closest && e.target.closest('#stStreak')) { e.preventDefault(); showStreakInfo(); } });
 
 /* ---------- sound (files in Audio/, falls back to WebAudio beeps) ---------- */
 let ac;
@@ -235,7 +276,7 @@ function finish() {
   const nx = nextInList();
   msg((wrong ? 'Solved!' : 'Perfect – solved without a mistake!') + (nx ? ' Loading next puzzle…' : 'End of this category!'), 'ok');
   if (!prog.s.includes(cur.id)) prog.s.push(cur.id);
-  prog.streak = wrong ? 0 : prog.streak + 1; saveProg(); renderList();
+  bumpStreak(); saveProg(); renderList();
   if (nx) { const id = cur.id; clearTimeout(autoT); autoT = setTimeout(() => { if (cur && cur.id === id && done) open(nx); }, 2500); }
 }
 
